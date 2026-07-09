@@ -1,6 +1,6 @@
 import Testing
 import CoreGraphics
-@testable import CheddarCore
+@testable import CVPipeline
 
 // Helper method (test passes in where to put the puck?). Draws a white 640x480 frame with a 20px black puck centered at `center`
 // (y measured from the bottom).

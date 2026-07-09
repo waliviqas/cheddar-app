@@ -2,10 +2,10 @@
 import PackageDescription
 
 let package = Package(
-    name: "CheddarCore",
+    name: "CVPipeline",
     platforms: [.iOS(.v17), .macOS(.v14)],
     targets: [
-        .target(name: "CheddarCore"),
-        .testTarget(name: "CheddarCoreTests", dependencies: ["CheddarCore"]),
+        .target(name: "CVPipeline"),
+        .testTarget(name: "CVPipelineTests", dependencies: ["CVPipeline"]),
     ]
 )
