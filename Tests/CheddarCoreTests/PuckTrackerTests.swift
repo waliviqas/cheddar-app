@@ -19,6 +19,20 @@ func makeFrame(puckAt center: CGPoint, size: CGSize = CGSize(width: 640, height:
     return ctx.makeImage()!
 }
 
+// Draws a plain white 640x480 frame with nothing on it.
+func makeBlankFrame(size: CGSize = CGSize(width: 640, height: 480)) -> CGImage {
+    let ctx = CGContext(
+        data: nil,
+        width: Int(size.width), height: Int(size.height),
+        bitsPerComponent: 8, bytesPerRow: 0,
+        space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+    )!
+    ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+    ctx.fill(CGRect(origin: .zero, size: size))
+    return ctx.makeImage()!
+}
+
 
 @Suite("PuckTracker — single frame")
 struct PuckTrackerSingleFrameTests {
@@ -77,5 +91,18 @@ struct PuckTrackerSingleFrameTests {
         let positions = PuckTracker().track(frames: frames)
 
         #expect(positions == path)
+    }
+
+    /*
+    - Checks what happens when a frame has no puck in it
+    - This test will expect nil back
+    */
+    @Test("returns nil when there is no puck in the frame")
+    func returnsNilForEmptyFrame() {
+        let blankFrame = makeBlankFrame()
+
+        let found = PuckTracker().detect(in: blankFrame)
+
+        #expect(found == nil)
     }
 }
