@@ -13,6 +13,7 @@ public struct PuckTracker {
     }
 
     // Finds the puck in one frame, or nil if there isn't one.
+    // *** THIS IS THE PART THAT GETS REPLACED WITH TRACKING CV LATER ON 8 ***
     public func detect(in frame: CGImage) -> CGPoint? {
         guard let pixels = readPixels(from: frame) else { return nil }
         let darkPixels = findDarkPixels(in: pixels, width: frame.width, height: frame.height)
