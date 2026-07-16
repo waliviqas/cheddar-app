@@ -4,6 +4,9 @@ import PackageDescription
 let package = Package(
     name: "CVPipeline",
     platforms: [.iOS(.v17), .macOS(.v14)],
+    products: [
+        .library(name: "CVPipeline", targets: ["CVPipeline"]),
+    ],
     targets: [
         .target(name: "CVPipeline"),
         .testTarget(
