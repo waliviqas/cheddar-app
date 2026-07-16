@@ -6,12 +6,23 @@ This class's only job is: flights in, the one that is actually a shot out.
 public struct ShotJudge {
     public init() {}
 
-    // Picks the flight that covers the most ground, the way a real shot does.
-    // Flights that never cover real distance are not shots at all.
+    // Picks the farthest-flying straight flight — a shot flies with intent.
+    // Wobbles that end near where they began and short crawls are noise, not shots.
     public func shot(among flights: [[CGPoint]]) -> [CGPoint]? {
-        let best = flights.max { totalDistance(of: $0) < totalDistance(of: $1) }
-        guard let best, totalDistance(of: best) >= 100 else { return nil }
-        return best
+        let candidates = flights.filter {
+            totalDistance(of: $0) >= 100 && straightness(of: $0) >= 0.8
+        }
+        return candidates.max { totalDistance(of: $0) < totalDistance(of: $1) }
+    }
+
+    // How direct a flight was: 1.0 means it never wavered from a straight line.
+    private func straightness(of flight: [CGPoint]) -> Double {
+        guard let first = flight.first, let last = flight.last else { return 0 }
+        let travelled = totalDistance(of: flight)
+        guard travelled > 0 else { return 0 }
+        let dx = last.x - first.x
+        let dy = last.y - first.y
+        return (dx * dx + dy * dy).squareRoot() / travelled
     }
 
     // Adds up how far a flight traveled between each pair of points.

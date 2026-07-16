@@ -1,4 +1,5 @@
 import Testing
+import Foundation
 import CoreGraphics
 @testable import CVPipeline
 
@@ -21,5 +22,29 @@ struct ShotAnalyzerTests {
         let mph = try #require(ShotAnalyzer().analyze(frames: frames, fps: 240, pixelsPerFoot: 100))
 
         #expect(abs(mph - 90.0) < 0.0001)
+    }
+
+    /*
+    - Real 240fps footage of a ball drop with a 30cm scale marked in frame
+    - Gravity is the ground truth: physics says the tracked fall averages ~6.4 mph
+    - This test will expect the whole chain (chopper, eyes, judge, math) to land within 0.5 mph
+    */
+    @Test("free-fall clip reads gravity's speed")
+    func freefallGroundTruth() async throws {
+        let repoRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let videoURL = repoRoot.appendingPathComponent("videos/freefall-240fps-gravity.mp4")
+        guard FileManager.default.fileExists(atPath: videoURL.path) else {
+            return // clip not on this machine; nothing to grade
+        }
+
+        let allFrames = try await VideoFrameExtractor().frames(from: videoURL)
+        let dropWindow = Array(allFrames[120...280])
+
+        let mph = try #require(ShotAnalyzer().analyze(frames: dropWindow, fps: 240, pixelsPerFoot: 90))
+
+        #expect(abs(mph - 6.4) < 0.5)
     }
 }

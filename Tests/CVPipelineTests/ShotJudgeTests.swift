@@ -69,4 +69,42 @@ struct ShotJudgeTests {
 
         #expect(picked == nil)
     }
+
+    /*
+    - A zigzag wanderer covers MORE total ground than the straight sprint, but bounces
+      up and down and ends where it started - noise, not a shot
+    - A shot flies fast and straight, so this test will expect the straight sprint back
+    */
+    @Test("picks the straight sprint over a farther-wandering zigzag")
+    func picksStraightOverZigzag() throws {
+        let straightSprint = [
+            CGPoint(x: 100, y: 100),
+            CGPoint(x: 200, y: 100),
+            CGPoint(x: 300, y: 100),
+            CGPoint(x: 400, y: 100),
+            CGPoint(x: 500, y: 100),
+            CGPoint(x: 600, y: 100),
+        ]
+        let zigzagWanderer = [
+            CGPoint(x: 400, y: 300),
+            CGPoint(x: 400, y: 380),
+            CGPoint(x: 400, y: 300),
+            CGPoint(x: 400, y: 380),
+            CGPoint(x: 400, y: 300),
+            CGPoint(x: 400, y: 380),
+            CGPoint(x: 400, y: 300),
+            CGPoint(x: 400, y: 380),
+            CGPoint(x: 400, y: 300),
+        ]
+        let slowDrift = [
+            CGPoint(x: 500, y: 300),
+            CGPoint(x: 503, y: 300),
+            CGPoint(x: 506, y: 301),
+            CGPoint(x: 509, y: 301),
+        ]
+
+        let picked = try #require(ShotJudge().shot(among: [zigzagWanderer, straightSprint, slowDrift]))
+
+        #expect(picked == straightSprint)
+    }
 }
