@@ -16,6 +16,16 @@ public struct SpeedCalculator {
         return mphFrom(feet: feet, seconds: seconds)
     }
 
+    // Turns a puck path into a speed in mph, using each frame's real time in seconds.
+    public func mph(path: [CGPoint?], times: [Double], pixelsPerFoot: Double) -> Double? {
+        let points = path.compactMap { $0 }
+        guard let first = path.firstIndex(where: { $0 != nil }),
+              let last = path.lastIndex(where: { $0 != nil }) else { return nil }
+        let feet = totalPixelDistance(of: points) / pixelsPerFoot
+        let seconds = times[last] - times[first]
+        return mphFrom(feet: feet, seconds: seconds)
+    }
+
     // Counts the frame gaps between the first and last time the puck was seen.
     private func frameGaps(in path: [CGPoint?]) -> Int? {
         guard let first = path.firstIndex(where: { $0 != nil }),
