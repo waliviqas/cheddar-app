@@ -1,0 +1,19 @@
+[
+  {
+    "clip": "1x/58mph-54mph.MOV",
+    "shots": [
+      {
+        "radarMph": 58,
+        "startSeconds": 9.1,
+        "puck": "black",
+        "restingPuck": { "x": 305, "y": 733, "seconds": 0 }
+      },
+      {
+        "radarMph": 54,
+        "startSeconds": 19.9,
+        "puck": "blue",
+        "restingPuck": { "x": 259, "y": 773, "seconds": 16.3 }
+      }
+    ]
+  }
+]
