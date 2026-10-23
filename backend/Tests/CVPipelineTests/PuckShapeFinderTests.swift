@@ -503,3 +503,79 @@ struct PuckShapeFinderColorTests {
         #expect(abs(box.midY - 240) <= 1)
     }
 }
+
+
+@Suite("PuckShapeFinder — no tap")
+struct PuckShapeFinderNoTapTests {
+
+    /*
+    - Two orange pucks at x=200 and x=400, and the finder is told to look for an orange 30px puck
+    - This test will expect both pucks back, each 30 wide, at x=200 and x=400
+    */
+    @Test("finds every puck that matches the look")
+    func findsBothMatchingPucks() {
+        let frame = makeFloorFrame(floor: rgb(0.5, 0.5, 0.5)) {
+            drawPuck($0, color: rgb(1, 0.5, 0), at: CGPoint(x: 200, y: 240))
+            drawPuck($0, color: rgb(1, 0.5, 0), at: CGPoint(x: 400, y: 240))
+        }
+
+        let boxes = PuckShapeFinder().pucks(in: frame, like: PuckLook(color: rgb(1, 0.5, 0), width: 30))
+            .sorted { $0.midX < $1.midX }
+
+        #expect(boxes.count == 2)
+        #expect(boxes.allSatisfy { abs($0.width - 30) <= 1 && abs($0.midY - 240) <= 1 })
+        #expect(abs((boxes.first?.midX ?? 0) - 200) <= 1)
+        #expect(abs((boxes.last?.midX ?? 0) - 400) <= 1)
+    }
+
+    /*
+    - A black puck at x=200 and an orange puck at x=400, and the finder is told to look for orange
+    - This test will expect only the orange puck back, at x=400
+    */
+    @Test("ignores pucks of a different color")
+    func ignoresOtherColors() {
+        let frame = makeFloorFrame(floor: rgb(0.5, 0.5, 0.5)) {
+            drawPuck($0, color: rgb(0, 0, 0), at: CGPoint(x: 200, y: 240))
+            drawPuck($0, color: rgb(1, 0.5, 0), at: CGPoint(x: 400, y: 240))
+        }
+
+        let boxes = PuckShapeFinder().pucks(in: frame, like: PuckLook(color: rgb(1, 0.5, 0), width: 30))
+
+        #expect(boxes.count == 1)
+        #expect(abs((boxes.first?.width ?? 0) - 30) <= 1)
+        #expect(abs((boxes.first?.midX ?? 0) - 400) <= 1)
+    }
+
+    /*
+    - An orange puck at x=200 and a big orange blob 120x80 at x=450, and the finder is told to look for a 30px orange puck
+    - This test will expect only the puck back, at x=200, not the blob
+    */
+    @Test("ignores same-colored things the wrong size")
+    func ignoresWrongSize() {
+        let frame = makeFloorFrame(floor: rgb(0.5, 0.5, 0.5)) {
+            drawPuck($0, color: rgb(1, 0.5, 0), at: CGPoint(x: 200, y: 240))
+            drawPuck($0, color: rgb(1, 0.5, 0), at: CGPoint(x: 450, y: 240), width: 120, height: 80)
+        }
+
+        let boxes = PuckShapeFinder().pucks(in: frame, like: PuckLook(color: rgb(1, 0.5, 0), width: 30))
+
+        #expect(boxes.count == 1)
+        #expect(abs((boxes.first?.width ?? 0) - 30) <= 1)
+        #expect(abs((boxes.first?.midX ?? 0) - 200) <= 1)
+    }
+
+    /*
+    - Only a black puck in the frame, and the finder is told to look for orange
+    - This test will expect nothing back
+    */
+    @Test("finds nothing when no puck matches the look")
+    func findsNothingWithoutMatch() {
+        let frame = makeFloorFrame(floor: rgb(0.5, 0.5, 0.5)) {
+            drawPuck($0, color: rgb(0, 0, 0), at: CGPoint(x: 300, y: 240))
+        }
+
+        let boxes = PuckShapeFinder().pucks(in: frame, like: PuckLook(color: rgb(1, 0.5, 0), width: 30))
+
+        #expect(boxes.isEmpty)
+    }
+}

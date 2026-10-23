@@ -19,7 +19,7 @@ struct ShotAnalyzerTests {
             makeFrame(puckAt: CGPoint(x: 210, y: 100)),
         ]
 
-        let mph = try #require(ShotAnalyzer().analyze(frames: frames, fps: 240, pixelsPerFoot: 100))
+        let mph = try #require(ShotAnalyzer(look: drawnPuckLook).analyze(frames: frames, fps: 240, pixelsPerFoot: 100))
 
         #expect(abs(mph - 90.0) < 0.0001)
     }
@@ -43,7 +43,9 @@ struct ShotAnalyzerTests {
         let allFrames = try await VideoFrameExtractor().frames(from: videoURL)
         let dropWindow = Array(allFrames[120...280])
 
-        let mph = try #require(ShotAnalyzer().analyze(frames: dropWindow, fps: 240, pixelsPerFoot: 90))
+        // A blue ball about 13px wide. Apple's flight detector follows this clip, so the look is only a backup.
+        let ball = PuckLook(color: CGColor(red: 0.1, green: 0.2, blue: 0.6, alpha: 1), width: 13)
+        let mph = try #require(ShotAnalyzer(look: ball).analyze(frames: dropWindow, fps: 240, pixelsPerFoot: 90))
 
         #expect(abs(mph - 6.4) < 0.5)
     }

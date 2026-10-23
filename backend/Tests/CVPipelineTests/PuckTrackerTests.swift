@@ -38,6 +38,9 @@ func makeDecoyFrame(puckAt puck: CGPoint, decoyAt decoy: CGPoint, size: CGSize =
     return ctx.makeImage()!
 }
 
+// What the drawn pucks above look like: black and 20px wide, as the setup tap would report.
+let drawnPuckLook = PuckLook(color: CGColor(red: 0, green: 0, blue: 0, alpha: 1), width: 20)
+
 // Draws a plain white 640x480 frame with nothing on it.
 func makeBlankFrame(size: CGSize = CGSize(width: 640, height: 480)) -> CGImage {
     let ctx = CGContext(
@@ -64,7 +67,7 @@ struct PuckTrackerSingleFrameTests {
     func findsPuck() throws {
         let frame = makeFrame(puckAt: CGPoint(x: 300, y: 400))
 
-        let found = try #require(PuckTracker().detect(in: frame))
+        let found = try #require(PuckTracker(look: drawnPuckLook).detect(in: frame))
 
         #expect(found == CGPoint(x: 300, y: 400))
     }
@@ -86,7 +89,7 @@ struct PuckTrackerSingleFrameTests {
 
         for position in path {
             let frame = makeFrame(puckAt: position)
-            let found = try #require(PuckTracker().detect(in: frame))
+            let found = try #require(PuckTracker(look: drawnPuckLook).detect(in: frame))
             #expect(found == position)
         }
     }
@@ -108,7 +111,7 @@ struct PuckTrackerSingleFrameTests {
 
         let frames = path.map { makeFrame(puckAt: $0) }
 
-        let positions = PuckTracker().track(frames: frames)
+        let positions = PuckTracker(look: drawnPuckLook).track(frames: frames)
 
         let expected: [CGPoint?] = [nil] + path.dropFirst().map { Optional($0) }
         #expect(positions == expected)
@@ -122,7 +125,7 @@ struct PuckTrackerSingleFrameTests {
     func returnsNilForEmptyFrame() {
         let blankFrame = makeBlankFrame()
 
-        let found = PuckTracker().detect(in: blankFrame)
+        let found = PuckTracker(look: drawnPuckLook).detect(in: blankFrame)
 
         #expect(found == nil)
     }
@@ -148,7 +151,7 @@ struct PuckTrackerSingleFrameTests {
             frames.append(makeDecoyFrame(puckAt: position, decoyAt: decoy))
         }
 
-        let positions = PuckTracker().track(frames: frames)
+        let positions = PuckTracker(look: drawnPuckLook).track(frames: frames)
 
         let expected: [CGPoint?] = [nil] + puckPath.dropFirst().map { Optional($0) }
         #expect(positions == expected)
@@ -178,7 +181,7 @@ struct PuckTrackerSingleFrameTests {
             frames.append(makeDecoyFrame(puckAt: position, decoyAt: decoy))
         }
 
-        let positions = PuckTracker().track(frames: frames)
+        let positions = PuckTracker(look: drawnPuckLook).track(frames: frames)
 
         let expected: [CGPoint?] = [nil] + puckPath.dropFirst().map { Optional($0) }
         #expect(positions == expected)
@@ -210,7 +213,7 @@ struct PuckTrackerSingleFrameTests {
             makeDecoyFrame(puckAt: puck, decoyAt: glove)
         }
 
-        let positions = PuckTracker().track(frames: frames)
+        let positions = PuckTracker(look: drawnPuckLook).track(frames: frames)
 
         let expected: [CGPoint?] = [nil, nil] + puckPath.dropFirst(2).map { Optional($0) }
         #expect(positions == expected)
@@ -235,7 +238,7 @@ struct PuckTrackerSingleFrameTests {
 
         let frames = path.map { makeFrame(puckAt: $0) }
 
-        let positions = PuckTracker().track(frames: frames)
+        let positions = PuckTracker(look: drawnPuckLook).track(frames: frames)
 
         let expected: [CGPoint?] = [nil] + path.dropFirst().map { Optional($0) }
         #expect(positions == expected)
@@ -255,7 +258,7 @@ struct PuckTrackerSingleFrameTests {
             frames.append(makeDecoyFrame(puckAt: puck, decoyAt: other))
         }
 
-        let flights = PuckTracker().flights(in: frames)
+        let flights = PuckTracker(look: drawnPuckLook).flights(in: frames)
 
         #expect(flights.count == 2)
 
