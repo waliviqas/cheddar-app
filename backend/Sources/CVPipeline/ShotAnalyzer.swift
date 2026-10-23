@@ -20,4 +20,20 @@ public struct ShotAnalyzer {
         let path = PuckTracker(look: look).track(frames: frames)
         return SpeedCalculator().mph(path: path, fps: fps, pixelsPerFoot: pixelsPerFoot)
     }
+
+    // Same pipeline, but uses each frame's real time in seconds instead of assuming 1/fps between frames.
+    // The judge's flight is laid back onto its frames, so each point is matched with its own time.
+    public func analyze(frames: [CGImage], times: [Double], pixelsPerFoot: Double) -> Double? {
+        let flights = PuckTracker(look: look).numberedFlights(in: frames)
+        if let shot = ShotJudge().shot(among: flights.map { $0.map { $0.point } }),
+           let flight = flights.first(where: { $0.map { $0.point } == shot }) {
+            var path = [CGPoint?](repeating: nil, count: frames.count)
+            for p in flight {
+                path[p.frame] = p.point
+            }
+            return SpeedCalculator().mph(path: path, times: times, pixelsPerFoot: pixelsPerFoot)
+        }
+        let path = PuckTracker(look: look).track(frames: frames)
+        return SpeedCalculator().mph(path: path, times: times, pixelsPerFoot: pixelsPerFoot)
+    }
 }

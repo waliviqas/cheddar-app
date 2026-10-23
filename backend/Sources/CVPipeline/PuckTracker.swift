@@ -26,8 +26,14 @@ public struct PuckTracker {
     // Reports every separate flight Vision saw, each as its own path of points.
     // Vision names each trajectory it follows, so points are grouped by that name — never mixed.
     public func flights(in frames: [CGImage]) -> [[CGPoint]] {
+        return numberedFlights(in: frames).map { $0.map { $0.point } }
+    }
+
+    // Same flights, but each point also says which frame it came from, so its real time can be looked up.
+    // Vision's newest point is always from the current frame, and the points before it are from the frames just before.
+    func numberedFlights(in frames: [CGImage]) -> [[(frame: Int, point: CGPoint)]] {
         let request = VNDetectTrajectoriesRequest(frameAnalysisSpacing: .zero, trajectoryLength: 5)
-        var flightsByName: [UUID: [CGPoint]] = [:]
+        var flightsByName: [UUID: [(frame: Int, point: CGPoint)]] = [:]
         var order: [UUID] = []
 
         for (index, frame) in frames.enumerated() {
@@ -36,8 +42,9 @@ public struct PuckTracker {
             try? handler.perform([request])
 
             for trajectory in request.results ?? [] {
-                let points = trajectory.detectedPoints.map {
-                    CGPoint(x: $0.x * Double(frame.width), y: $0.y * Double(frame.height))
+                let points = trajectory.detectedPoints.enumerated().map { (k, p) in
+                    (frame: index - trajectory.detectedPoints.count + 1 + k,
+                     point: CGPoint(x: p.x * Double(frame.width), y: p.y * Double(frame.height)))
                 }
                 if flightsByName[trajectory.uuid] == nil {
                     order.append(trajectory.uuid)
