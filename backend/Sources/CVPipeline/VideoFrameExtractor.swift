@@ -33,14 +33,17 @@ public struct VideoFrameExtractor {
     }
 
     // Reads the time stamped on every frame, in seconds, front to back.
-    // Only the stamps are read, not the pictures, so this is quick.
+    // Frames are unpacked the same way frames(from:) does it, so leftovers hidden by a cut are
+    // dropped the same way, and the times line up one to one with the pictures.
     public func times(from url: URL) async throws -> [Double] {
         let asset = AVURLAsset(url: url)
         guard let track = try await asset.loadTracks(withMediaType: .video).first else {
             return []
         }
         let reader = try AVAssetReader(asset: asset)
-        let output = AVAssetReaderTrackOutput(track: track, outputSettings: nil)
+        let output = AVAssetReaderTrackOutput(track: track, outputSettings: [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
+        ])
         reader.add(output)
         reader.startReading()
 

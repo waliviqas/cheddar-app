@@ -6,7 +6,8 @@ import CoreGraphics
 // Writes a list of frames into a real .mov file in the temp folder, so the test
 // knows exactly how many frames the video holds.
 // `ticks` says which 1/fps slot each frame lands on; leave it out for evenly spaced frames.
-func makeVideo(frames: [CGImage], fps: Int32, ticks: [Int]? = nil) throws -> URL {
+// `hiddenLeading` frames are stored in the file but hidden from playback, like the leftovers a cut leaves behind.
+func makeVideo(frames: [CGImage], fps: Int32, ticks: [Int]? = nil, hiddenLeading: Int = 0) throws -> URL {
     let url = FileManager.default.temporaryDirectory
         .appendingPathComponent("test-video-\(UUID().uuidString).mov")
     let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
@@ -28,7 +29,7 @@ func makeVideo(frames: [CGImage], fps: Int32, ticks: [Int]? = nil) throws -> URL
     )
     writer.add(input)
     writer.startWriting()
-    writer.startSession(atSourceTime: .zero)
+    writer.startSession(atSourceTime: CMTime(value: CMTimeValue(hiddenLeading), timescale: fps))
 
     for (i, frame) in frames.enumerated() {
         while !input.isReadyForMoreMediaData { usleep(1000) }
@@ -98,6 +99,29 @@ struct VideoFrameExtractorTests {
         let times = try await VideoFrameExtractor().times(from: url)
 
         let expected = [0.0, 1.0 / 240, 2.0 / 240, 5.0 / 240]
+        #expect(times.count == 4)
+        #expect(zip(times, expected).allSatisfy { abs($0 - $1) < 0.0001 })
+    }
+
+    /*
+    - Builds a 240fps video with 6 frames at 0 to 5/240 seconds, but the first 2 are hidden leftovers,
+      like the extra frames a cut-out shot quietly keeps from just before the cut
+    - The pictures and the times must line up one to one, or every picture gets the wrong time
+    - A cut video's clock starts over at 0, so the 4 visible frames play at 0, 1/240, 2/240, and 3/240
+    - This test will expect 4 pictures and 4 times, and the times to be 0, 1/240, 2/240, and 3/240
+    */
+    @Test("leftover frames hidden by a cut are dropped, so pictures and times line up")
+    func dropsHiddenLeftoverFrames() async throws {
+        let frames = (0..<6).map { i in
+            makeFrame(puckAt: CGPoint(x: 100 + 50 * Double(i), y: 100))
+        }
+        let url = try makeVideo(frames: frames, fps: 240, hiddenLeading: 2)
+
+        let pictures = try await VideoFrameExtractor().frames(from: url)
+        let times = try await VideoFrameExtractor().times(from: url)
+
+        let expected = [0.0, 1.0 / 240, 2.0 / 240, 3.0 / 240]
+        #expect(pictures.count == 4)
         #expect(times.count == 4)
         #expect(zip(times, expected).allSatisfy { abs($0 - $1) < 0.0001 })
     }
