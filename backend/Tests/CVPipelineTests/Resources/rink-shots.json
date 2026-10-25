@@ -1,19 +1,58 @@
 [
   {
+    "clip": "0.5x/45mph-43mph.MOV",
+    "shots": [
+      { "radarMph": 45, "startSeconds": 7.4, "puck": "black", "restingPuck": { "x": 266, "y": 791, "seconds": 5.4 } },
+      { "radarMph": 43, "startSeconds": 16.8, "puck": "blue", "restingPuck": { "x": 203, "y": 819, "seconds": 9.5 } }
+    ]
+  },
+  {
+    "clip": "0.5x/49mph-61mph.MOV",
+    "shots": [
+      { "radarMph": 49, "startSeconds": 7.6, "puck": "black", "restingPuck": { "x": 364, "y": 756, "seconds": 4.9 } },
+      { "radarMph": 61, "startSeconds": 20, "puck": "blue", "restingPuck": { "x": 131, "y": 866, "seconds": 16.7 } }
+    ]
+  },
+  {
+    "clip": "0.5x/58mph-49mph.MOV",
+    "shots": [
+      { "radarMph": 58, "startSeconds": 6.8, "puck": "blue", "restingPuck": { "x": 346, "y": 781, "seconds": 3.7 } },
+      { "radarMph": 49, "startSeconds": 17.5, "puck": "black", "restingPuck": { "x": 328, "y": 775, "seconds": 13.4 } }
+    ]
+  },
+  {
+    "clip": "1x/41mph-49mph.MOV",
+    "shots": [
+      { "radarMph": 41, "startSeconds": 11.2, "puck": "blue", "restingPuck": { "x": 332, "y": 760, "seconds": 6.9 } },
+      { "radarMph": 49, "startSeconds": 28, "puck": "black", "restingPuck": { "x": 143, "y": 807, "seconds": 19.2 } }
+    ]
+  },
+  {
+    "clip": "1x/45mph-40mph.MOV",
+    "shots": [
+      { "radarMph": 45, "startSeconds": 11.1, "puck": "blue", "restingPuck": { "x": 340, "y": 724, "seconds": 5.9 } },
+      { "radarMph": 40, "startSeconds": 23.6, "puck": "black", "restingPuck": { "x": 169, "y": 791, "seconds": 18.1 } }
+    ]
+  },
+  {
+    "clip": "1x/49mph-49mph-third-shot.MOV",
+    "shots": [
+      { "radarMph": 49, "startSeconds": 9.8, "puck": "blue", "restingPuck": { "x": 217, "y": 720, "seconds": 4.8 } },
+      { "radarMph": 49, "startSeconds": 22.9, "puck": "black", "restingPuck": { "x": 175, "y": 797, "seconds": 20.2 } }
+    ]
+  },
+  {
+    "clip": "1x/49mph-49mph.MOV",
+    "shots": [
+      { "radarMph": 49, "startSeconds": 10.7, "puck": "blue", "restingPuck": { "x": 169, "y": 742, "seconds": 7.8 } },
+      { "radarMph": 49, "startSeconds": 22.6, "puck": "black", "restingPuck": { "x": 121, "y": 815, "seconds": 20.3 } }
+    ]
+  },
+  {
     "clip": "1x/58mph-54mph.MOV",
     "shots": [
-      {
-        "radarMph": 58,
-        "startSeconds": 9.1,
-        "puck": "black",
-        "restingPuck": { "x": 305, "y": 733, "seconds": 0 }
-      },
-      {
-        "radarMph": 54,
-        "startSeconds": 19.9,
-        "puck": "blue",
-        "restingPuck": { "x": 259, "y": 773, "seconds": 16.3 }
-      }
+      { "radarMph": 58, "startSeconds": 9.2, "puck": "black", "restingPuck": { "x": 306, "y": 736, "seconds": 6.3 } },
+      { "radarMph": 54, "startSeconds": 20, "puck": "blue", "restingPuck": { "x": 262, "y": 769, "seconds": 16.4 } }
     ]
   }
 ]
