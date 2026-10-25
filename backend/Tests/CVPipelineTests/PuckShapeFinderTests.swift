@@ -579,3 +579,113 @@ struct PuckShapeFinderNoTapTests {
         #expect(boxes.isEmpty)
     }
 }
+
+
+// Whether a look's color is within 0.1 of the color made from the given red, green, and blue amounts (0-1).
+// Both are put in the same color space first, so the comparison is fair.
+func looksLike(_ look: PuckLook, _ r: Double, _ g: Double, _ b: Double) -> Bool {
+    let space = CGColorSpaceCreateDeviceRGB()
+    guard let got = look.color.converted(to: space, intent: .defaultIntent, options: nil)?.components,
+          let want = rgb(r, g, b).converted(to: space, intent: .defaultIntent, options: nil)?.components else { return false }
+    return zip(got.prefix(3), want.prefix(3)).allSatisfy { abs($0 - $1) <= 0.1 }
+}
+
+
+@Suite("PuckShapeFinder — shooting area")
+struct PuckShapeFinderShootingAreaTests {
+
+    /*
+    - A bright floor with a big gray shadow, and a dark puck inside the shadow, only a bit darker than the shadow
+    - The player tapped the shooting area 40px to the right of the puck, not on it
+    - This test will expect one puck back: 30 wide, centered at (300, 240), not the shadow
+    */
+    @Test("finds a puck sitting in shadow near the tap")
+    func findsPuckInShadow() {
+        let frame = makeFloorFrame(floor: rgb(0.85, 0.85, 0.85)) {
+            $0.setFillColor(rgb(0.35, 0.35, 0.38))
+            $0.fill(CGRect(x: 100, y: 140, width: 400, height: 200))
+            drawPuck($0, color: rgb(0.2, 0.2, 0.22), at: CGPoint(x: 300, y: 240))
+        }
+
+        let found = PuckShapeFinder().pucks(in: frame, around: CGPoint(x: 340, y: 240))
+
+        #expect(found.count == 1)
+        #expect(abs((found.first?.box.width ?? 0) - 30) <= 1)
+        #expect(abs((found.first?.box.midX ?? 0) - 300) <= 1)
+        #expect(abs((found.first?.box.midY ?? 0) - 240) <= 1)
+    }
+
+    /*
+    - The shooting area is empty floor; the only puck is far away across the frame
+    - This test will expect nothing back, so the app can say "No puck detected"
+    */
+    @Test("an empty shooting area finds nothing")
+    func emptyAreaFindsNothing() {
+        let frame = makeFloorFrame(floor: rgb(0.6, 0.6, 0.6)) {
+            drawPuck($0, color: rgb(0, 0, 0), at: CGPoint(x: 550, y: 400))
+        }
+
+        let found = PuckShapeFinder().pucks(in: frame, around: CGPoint(x: 150, y: 150))
+
+        #expect(found.isEmpty)
+    }
+
+    /*
+    - The only thing near the tap is a dark mat 250x150, far too big to be a puck
+    - This test will expect nothing back, not the mat
+    */
+    @Test("something far too big to be a puck is not a puck")
+    func hugeThingIsNotAPuck() {
+        let frame = makeFloorFrame(floor: rgb(0.85, 0.85, 0.85)) {
+            $0.setFillColor(rgb(0.1, 0.1, 0.1))
+            $0.fill(CGRect(x: 200, y: 160, width: 250, height: 150))
+        }
+
+        let found = PuckShapeFinder().pucks(in: frame, around: CGPoint(x: 320, y: 240))
+
+        #expect(found.isEmpty)
+    }
+
+    /*
+    - One puck in the shooting area, tried in three colors: blue, black, and green
+    - Green is a color none of the real pucks are, so the code can't be relying on a list of colors
+    - This test will expect each puck found, 30 wide, and reported as its own color
+    */
+    @Test("reports the color of whatever puck is in the shooting area")
+    func reportsPuckColor() {
+        let colors: [(r: Double, g: Double, b: Double)] = [(0.1, 0.3, 0.9), (0, 0, 0), (0.1, 0.7, 0.2)]
+        for c in colors {
+            let frame = makeFloorFrame(floor: rgb(0.6, 0.6, 0.6)) {
+                drawPuck($0, color: rgb(c.r, c.g, c.b), at: CGPoint(x: 300, y: 240))
+            }
+
+            let found = PuckShapeFinder().pucks(in: frame, around: CGPoint(x: 330, y: 240))
+
+            #expect(found.count == 1)
+            #expect(abs((found.first?.look.width ?? 0) - 30) <= 1)
+            #expect(found.first.map { looksLike($0.look, c.r, c.g, c.b) } == true)
+        }
+    }
+
+    /*
+    - A black puck and a blue puck sit side by side in the shooting area, like Wali's clips
+    - Before the shot, the program can't know which one will be hit, so it reports both
+    - This test will expect two pucks back, one black at x=270 and one blue at x=330
+    */
+    @Test("two pucks in the shooting area are both found, each with its own color")
+    func findsBothPucks() {
+        let frame = makeFloorFrame(floor: rgb(0.6, 0.6, 0.6)) {
+            drawPuck($0, color: rgb(0, 0, 0), at: CGPoint(x: 270, y: 240))
+            drawPuck($0, color: rgb(0.1, 0.3, 0.9), at: CGPoint(x: 330, y: 240))
+        }
+
+        let found = PuckShapeFinder().pucks(in: frame, around: CGPoint(x: 300, y: 240))
+            .sorted { $0.box.midX < $1.box.midX }
+
+        #expect(found.count == 2)
+        #expect(abs((found.first?.box.midX ?? 0) - 270) <= 1)
+        #expect(abs((found.last?.box.midX ?? 0) - 330) <= 1)
+        #expect(found.first.map { looksLike($0.look, 0, 0, 0) } == true)
+        #expect(found.last.map { looksLike($0.look, 0.1, 0.3, 0.9) } == true)
+    }
+}

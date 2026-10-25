@@ -37,13 +37,12 @@ struct ShotAnalyzerTests {
             .deletingLastPathComponent()
         let videoURL = repoRoot.appendingPathComponent("videos/freefall-240fps-gravity.mp4")
         guard FileManager.default.fileExists(atPath: videoURL.path) else {
-            return // clip not on this machine; nothing to grade
+            return
         }
 
         let allFrames = try await VideoFrameExtractor().frames(from: videoURL)
         let dropWindow = Array(allFrames[120...280])
 
-        // A blue ball about 13px wide. Apple's flight detector follows this clip, so the look is only a backup.
         let ball = PuckLook(color: CGColor(red: 0.1, green: 0.2, blue: 0.6, alpha: 1), width: 13)
         let mph = try #require(ShotAnalyzer(look: ball).analyze(frames: dropWindow, fps: 240, pixelsPerFoot: 90))
 

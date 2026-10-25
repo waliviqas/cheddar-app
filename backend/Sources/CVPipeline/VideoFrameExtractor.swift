@@ -32,6 +32,30 @@ public struct VideoFrameExtractor {
         return frames
     }
 
+    // Pulls out only the frames between two moments in the video, each with its real time in seconds.
+    public func frames(from url: URL, between start: Double, and end: Double) async throws -> [(image: CGImage, seconds: Double)] {
+        let asset = AVURLAsset(url: url)
+        guard let track = try await asset.loadTracks(withMediaType: .video).first else {
+            return []
+        }
+        let reader = try AVAssetReader(asset: asset)
+        reader.timeRange = CMTimeRange(start: CMTime(seconds: start, preferredTimescale: 600),
+                                       end: CMTime(seconds: end, preferredTimescale: 600))
+        let output = AVAssetReaderTrackOutput(track: track, outputSettings: [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
+        ])
+        reader.add(output)
+        reader.startReading()
+
+        var frames: [(image: CGImage, seconds: Double)] = []
+        while let sample = output.copyNextSampleBuffer() {
+            if let image = makeImage(from: sample) {
+                frames.append((image, CMSampleBufferGetPresentationTimeStamp(sample).seconds))
+            }
+        }
+        return frames
+    }
+
     // Reads the time stamped on every frame, in seconds, front to back.
     // Frames are unpacked the same way frames(from:) does it, so leftovers hidden by a cut are
     // dropped the same way, and the times line up one to one with the pictures.
@@ -49,12 +73,10 @@ public struct VideoFrameExtractor {
 
         var times: [Double] = []
         while let sample = output.copyNextSampleBuffer() {
-            // Some entries are bookkeeping with no picture in them; only real frames count.
             let time = CMSampleBufferGetPresentationTimeStamp(sample)
             guard CMSampleBufferGetNumSamples(sample) > 0, time.isNumeric else { continue }
             times.append(time.seconds)
         }
-        // Unpacked video can come out of storage order, so put the stamps back in playing order.
         return times.sorted()
     }
 

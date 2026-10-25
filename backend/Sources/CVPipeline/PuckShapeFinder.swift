@@ -25,10 +25,8 @@ public struct PuckShapeFinder {
     public func puck(in frame: CGImage, near tap: CGPoint) -> CGRect? {
         guard let (colors, floor) = readColors(of: frame) else { return nil }
 
-        // The tap is measured from the bottom; pixel rows are counted from the top.
         let tapped = colors[(frame.height - 1 - Int(tap.y)) * frame.width + Int(tap.x)]
 
-        // A tap that matches the floor's color missed the puck.
         guard difference(tapped, floor) >= 60 * 60 else { return nil }
 
         var best: CGRect?
@@ -59,6 +57,43 @@ public struct PuckShapeFinder {
             .map { $0.box }
     }
 
+    // Returns every puck sitting near the tapped spot, each with the look learned from it: its color and width.
+    // No color is known in advance: a puck is anything that stands out from the floor right around the spot.
+    public func pucks(in frame: CGImage, around spot: CGPoint) -> [(box: CGRect, look: PuckLook)] {
+        guard let (colors, _) = readColors(of: frame) else { return [] }
+
+        let reach = frame.width / 10
+        let spotCol = Int(spot.x)
+        let spotRow = frame.height - 1 - Int(spot.y)
+        let cols = max(0, spotCol - reach)..<min(frame.width, spotCol + reach)
+        let rows = max(0, spotRow - reach)..<min(frame.height, spotRow + reach)
+
+        var total = (r: 0, g: 0, b: 0)
+        for row in rows {
+            for col in cols {
+                let c = colors[row * frame.width + col]
+                total = (total.r + c.r, total.g + c.g, total.b + c.b)
+            }
+        }
+        let count = rows.count * cols.count
+        guard count > 0 else { return [] }
+        let floor = (r: total.r / count, g: total.g / count, b: total.b / count)
+
+        var shades = [UInt8](repeating: 255, count: colors.count)
+        for row in rows {
+            for col in cols where difference(colors[row * frame.width + col], floor) >= 50 * 50 {
+                shades[row * frame.width + col] = 0
+            }
+        }
+
+        return trace(&shades, in: frame).map { box in
+            let c = colors[(frame.height - 1 - Int(box.midY)) * frame.width + Int(box.midX)]
+            let color = CGColor(colorSpace: CGColorSpaceCreateDeviceRGB(),
+                                components: [Double(c.r) / 255, Double(c.g) / 255, Double(c.b) / 255, 1])!
+            return (box, PuckLook(color: color, width: box.width))
+        }
+    }
+
     // The average color of the area just around a box, the box itself included.
     private func averageColor(around box: CGRect, in frame: CGImage, colors: [Color]) -> Color {
         let grown = box.insetBy(dx: -box.width, dy: -box.height)
@@ -66,7 +101,6 @@ public struct PuckShapeFinder {
         guard !grown.isNull, grown.width >= 1, grown.height >= 1 else { return (0, 0, 0) }
         var total = (r: 0, g: 0, b: 0)
         var count = 0
-        // Boxes measure y from the bottom; pixel rows are counted from the top.
         for row in (frame.height - Int(grown.maxY))..<(frame.height - Int(grown.minY)) {
             for col in Int(grown.minX)..<Int(grown.maxX) {
                 let c = colors[row * frame.width + col]
@@ -89,7 +123,12 @@ public struct PuckShapeFinder {
                 shades[p] = 0
             }
         }
+        return trace(&shades, in: frame)
+    }
 
+    // Asks Vision to trace every black shape in a black-and-white repaint of the frame, at full size,
+    // and returns their boxes in pixels with y measured from the bottom.
+    private func trace(_ shades: inout [UInt8], in frame: CGImage) -> [CGRect] {
         guard let grayCtx = CGContext(
             data: &shades,
             width: frame.width, height: frame.height,
@@ -108,7 +147,6 @@ public struct PuckShapeFinder {
         for i in 0..<observation.contourCount {
             guard let contour = try? observation.contour(at: i) else { continue }
             let bb = contour.normalizedPath.boundingBoxOfPath
-            // Outlines run along pixel edges, so round away Vision's tiny 0-1 rounding errors.
             let minX = (bb.minX * CGFloat(frame.width)).rounded()
             let minY = (bb.minY * CGFloat(frame.height)).rounded()
             let maxX = (bb.maxX * CGFloat(frame.width)).rounded()

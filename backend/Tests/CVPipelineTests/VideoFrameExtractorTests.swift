@@ -17,7 +17,6 @@ func makeVideo(frames: [CGImage], fps: Int32, ticks: [Int]? = nil, hiddenLeading
         AVVideoHeightKey: frames[0].height,
     ]
     let input = AVAssetWriterInput(mediaType: .video, outputSettings: settings)
-    // Store times in 1/fps units so frame times are saved exactly, not rounded.
     input.mediaTimeScale = fps
     let adaptor = AVAssetWriterInputPixelBufferAdaptor(
         assetWriterInput: input,
