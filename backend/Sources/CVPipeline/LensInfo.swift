@@ -1,7 +1,7 @@
 /*
 This class's only job is: hold the camera's lens numbers so CameraPose can use them.
 */
-public struct LensInfo {
+public struct LensInfo: Sendable {
     public let width: Double     // picture size in pixels
     public let height: Double
     public let centerX: Double   // the lens's center, in pixels
