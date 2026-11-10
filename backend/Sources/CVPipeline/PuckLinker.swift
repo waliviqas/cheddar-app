@@ -6,37 +6,46 @@ This class's only job is: follow the shot puck from the stick, frame by frame, t
 puck model saw, ignoring look-alikes that never move.
 */
 public struct PuckLinker {
-    private let startReach: CGFloat = 40   // how far from the clack spot the puck can be in the first frame
-    private let firstStep: CGFloat = 60    // how far it can move in the next frame, before we know its speed
-    private let maxMissed = 3              // frames the puck can go unseen (blur) before we call it gone
+    private let startReach: CGFloat = 40      // how far from the clack spot the puck can be in the first frame
+    private let firstStep: CGFloat = 60       // how far it can move in 1/240 s, before we know its speed
+    private let tick = 1.0 / 240              // one slow-mo frame, when the video doesn't skip any
+    private let maxUnseen = 4.0 / 240         // how long the puck can go unseen (blur) before we call it gone
 
     public init() {}
 
-    // `frames` are the puck model's boxes for each frame, starting at the clack frame (y down).
+    // `frames` are the puck model's boxes for each frame, starting at the clack frame (y down), and `times` is each
+    // frame's real time in seconds (slow-mo video skips frames now and then, so they aren't evenly spaced).
     // Returns the shot puck's spot in each frame, or nil where it wasn't seen.
-    public func path(from start: CGPoint, through frames: [[CGRect]]) -> [CGPoint?] {
+    public func path(from start: CGPoint, through frames: [[CGRect]], times: [Double]) -> [CGPoint?] {
         let spots = frames.map { $0.map { CGPoint(x: $0.midX, y: $0.midY) } }
         let moving = spots.indices.map { i in spots[i].filter { !isStill($0, at: i, in: spots) } }
 
         var path = [CGPoint?](repeating: nil, count: frames.count)
-        guard let first = nearest(to: start, in: moving.first ?? [], within: startReach) else { return path }
+        guard frames.count == times.count, let first = nearest(to: start, in: moving.first ?? [], within: startReach) else { return path }
         path[0] = first
 
-        var last = first, lastFrame = 0
-        var velocity: CGPoint? = nil     // pixels per frame, once we've seen it twice
+        var last = first, lastTime = times[0]
+        var velocity: CGPoint? = nil     // pixels per second, once we've seen it twice
         for i in 1..<frames.count {
-            let gap = CGFloat(i - lastFrame)
-            guard i - lastFrame <= maxMissed + 1 else { break }
+            let gap = times[i] - lastTime
+            // A skipped video frame isn't the puck going unseen; only give up after real frames go by without it.
+            guard gap <= maxUnseen + 2 * tick + 1e-6 || hasRecentSighting(lastTime, times, i) else { break }
+            let ticks = CGFloat(gap / tick)
             let guess = CGPoint(x: last.x + (velocity?.x ?? 0) * gap, y: last.y + (velocity?.y ?? 0) * gap)
-            let speed = velocity.map { hypot($0.x, $0.y) } ?? 0
-            let reach = velocity == nil ? firstStep * gap : max(15, speed * 0.5) * gap
+            let speedPerTick = velocity.map { hypot($0.x, $0.y) * tick } ?? 0
+            let reach = velocity == nil ? firstStep * ticks : max(15, speedPerTick * 0.5) * ticks
             guard let found = nearest(to: guess, in: moving[i], within: reach) else { continue }
             velocity = CGPoint(x: (found.x - last.x) / gap, y: (found.y - last.y) / gap)
             path[i] = found
             last = found
-            lastFrame = i
+            lastTime = times[i]
         }
         return path
+    }
+
+    // Whether fewer than 4 real frames have gone by since the last sighting (frames the video skipped don't count).
+    private func hasRecentSighting(_ lastTime: Double, _ times: [Double], _ i: Int) -> Bool {
+        times[..<i].filter { $0 > lastTime }.count < 4
     }
 
     // A spot that's in the same place (within 3 px) in the frame before and the frame after isn't moving,

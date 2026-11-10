@@ -5,7 +5,7 @@ import CoreGraphics
 
 /*
 PuckLinker gets every puck-looking box the puck model saw in each frame, starting at the clack frame,
-plus where the puck is at the clack. It hands back the shot puck's spot in each frame (nil where it wasn't seen).
+each frame's real time (slow-mo video skips frames now and then), plus where the puck is at the clack. It hands back the shot puck's spot in each frame (nil where it wasn't seen).
 Pixels are measured from the top-left, y down.
 */
 @Suite("PuckLinker")
@@ -19,7 +19,7 @@ struct PuckLinkerTests {
     func followsThePuck() {
         let truth = flight(from: CGPoint(x: 200, y: 900), step: CGPoint(x: 30, y: -6), frames: 20)
 
-        let path = PuckLinker().path(from: truth[0], through: truth.map { [box(at: $0)] })
+        let path = PuckLinker().path(from: truth[0], through: truth.map { [box(at: $0)] }, times: evenTimes(20))
 
         #expect(path.count == 20)
         for (spot, real) in zip(path, truth) {
@@ -36,7 +36,7 @@ struct PuckLinkerTests {
         let truth = flight(from: CGPoint(x: 200, y: 900), step: CGPoint(x: 30, y: -6), frames: 10)
         let elsewhere = CGPoint(x: 1400, y: 300)
 
-        let path = PuckLinker().path(from: CGPoint(x: 205, y: 896), through: truth.map { [box(at: elsewhere), box(at: $0)] })
+        let path = PuckLinker().path(from: CGPoint(x: 205, y: 896), through: truth.map { [box(at: elsewhere), box(at: $0)] }, times: evenTimes(10))
 
         for (spot, real) in zip(path, truth) {
             #expect(distance(spot, real) <= 1)
@@ -55,7 +55,7 @@ struct PuckLinkerTests {
         let oldPuck = CGPoint(x: 900, y: 760)
         let frames = (0..<25).map { i in (i < 15 ? [box(at: truth[i])] : []) + [box(at: oldPuck)] }
 
-        let path = PuckLinker().path(from: truth[0], through: frames)
+        let path = PuckLinker().path(from: truth[0], through: frames, times: evenTimes(25))
 
         for i in 0..<15 {
             #expect(distance(path[i], truth[i]) <= 1, "lost the shot at frame \(i)")
@@ -77,12 +77,30 @@ struct PuckLinkerTests {
         let truth = flight(from: CGPoint(x: 200, y: 900), step: CGPoint(x: 30, y: -6), frames: 16)
         let frames = truth.enumerated().map { i, p in (i == 8 || i == 9) ? [] : [box(at: p)] }
 
-        let path = PuckLinker().path(from: truth[0], through: frames)
+        let path = PuckLinker().path(from: truth[0], through: frames, times: evenTimes(16))
 
         #expect(path[8] == nil)
         #expect(path[9] == nil)
         for i in [0, 5, 7, 10, 12, 15] {
             #expect(distance(path[i], truth[i]) <= 1, "frame \(i)")
+        }
+    }
+
+    /*
+    - The video skips 2 frames out of every 10 (like iPhone slow-mo does), so between some frames the puck jumps
+      3 times as far as usual
+    - The path should still follow it in every frame the video has, within 1 px
+    */
+    @Test("follows the puck across frames the video skipped")
+    func followsThroughSkippedFrames() {
+        let kept = (0..<40).filter { $0 % 10 != 8 && $0 % 10 != 9 }
+        let truth = kept.map { CGPoint(x: 200 + 30 * CGFloat($0), y: 900 - 6 * CGFloat($0)) }
+
+        let path = PuckLinker().path(from: truth[0], through: truth.map { [box(at: $0)] }, times: kept.map { Double($0) / 240 })
+
+        #expect(path.count == truth.count)
+        for (spot, real) in zip(path, truth) {
+            #expect(distance(spot, real) <= 1)
         }
     }
 
@@ -104,7 +122,7 @@ struct PuckLinkerTests {
             // The puck model measures y from the bottom; flip to y down like everything else.
             detector.pucks(in: frame.image).map { CGRect(x: $0.minX, y: CGFloat(frame.image.height) - $0.maxY, width: $0.width, height: $0.height) }
         }
-        let path = PuckLinker().path(from: start, through: boxes)
+        let path = PuckLinker().path(from: start, through: boxes, times: frames.map { $0.seconds - frames[0].seconds })
 
         let seen = path.compactMap { $0 }
         #expect(seen.count >= 15, "only followed the puck for \(seen.count) frames")
@@ -112,6 +130,9 @@ struct PuckLinkerTests {
         #expect(distance(start, netMiddle) - distance(last, netMiddle) >= 600, "ended at \(last)")
     }
 }
+
+// Frame times when the video doesn't skip any: 1/240 s apart.
+private func evenTimes(_ n: Int) -> [Double] { (0..<n).map { Double($0) / 240 } }
 
 // Where a puck is in each frame when it moves the same amount every frame.
 private func flight(from start: CGPoint, step: CGPoint, frames: Int) -> [CGPoint] {
