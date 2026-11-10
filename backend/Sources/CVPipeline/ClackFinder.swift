@@ -11,13 +11,11 @@ public struct ClackFinder {
     private var pending: [Float] = []
     // Loudness of the most recent slices, used as the background to compare against.
     private var recentLoudness: [Float] = []
-    private var lastClackSeconds = -Double.infinity
 
     private let sliceSize = 96            // 2 ms at 48,000 a second
-    private let backgroundSlices = 100    // 0.2 s
+    private let backgroundSlices = 500    // 1 s
     private let warmupSlices = 10
-    private let timesLouder: Float = 10
-    private let gapSeconds = 0.05         // one clack can't repeat this fast
+    private let timesLouder: Float = 16
 
     public init() {}
 
@@ -34,10 +32,10 @@ public struct ClackFinder {
             let seconds = audio.time(at: spot)
 
             if recentLoudness.count >= warmupSlices {
-                let background = recentLoudness.reduce(0, +) / Float(recentLoudness.count)
-                if loudness > timesLouder * max(background, 1e-4), seconds - lastClackSeconds > gapSeconds {
+                // The typical (middle) loudness, so one loud bang just before a shot doesn't hide it.
+                let background = recentLoudness.sorted()[recentLoudness.count / 2]
+                if loudness > timesLouder * max(background, 1e-4) {
                     clacks.append(seconds)
-                    lastClackSeconds = seconds
                 }
             }
 

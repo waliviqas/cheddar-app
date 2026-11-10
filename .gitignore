@@ -61,3 +61,8 @@ fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
 videos/
+
+cool-pictures/
+
+# Segment Anything model files (downloaded from Hugging Face, too big for GitHub)
+backend/Models/SAM2.1-Large/
