@@ -10,24 +10,28 @@ z up from the ice.
 public struct ShotFlight {
     public let crossingTime: Double            // seconds after the clack frame
     public let crossingSpot: SIMD2<Double>     // where the puck's middle was right then: inches across, inches up
-    public let distance: Double                // inches the puck flew from where it started to that spot
-    public let launchTime: Double              // seconds after the clack frame when the puck left the stick
-    public var flightTime: Double { crossingTime - launchTime }   // from leaving the stick to the whole puck over the line
+    public let distance: Double                // inches the puck flew from where it left the stick to that spot
+    public let releaseTime: Double             // seconds after the clack frame when the puck left the stick
+    public var flightTime: Double { crossingTime - releaseTime }   // from leaving the stick to the whole puck over the line
 
     static let puckRadius = 1.5                // a puck is 3 in across
     static let maxUnseenBeforeLine = 4.0 / 240 // how long the puck can go unseen right before the line and still count
 
     // `path` is the puck's spot in each frame from the clack on (nil where unseen), `times` is each frame's real time
-    // in seconds after the clack frame (slow-mo skips frames now and then), `start` is where it sat on the ice.
-    public init?(path: [CGPoint?], times: [Double], start: SIMD3<Double>, pose: CameraPose, lens: LensInfo) {
+    // in seconds after the clack frame (slow-mo skips frames now and then), and `releaseTime` is when the puck left the
+    // stick (from ReleaseFinder), on the same clock as `times`.
+    public init?(path: [CGPoint?], times: [Double], releaseTime: Double, pose: CameraPose, lens: LensInfo) {
         guard path.count == times.count, let first = times.first else { return nil }
-        // The puck often sits at the blade for a few frames after the clack. It left the stick right after the last
-        // frame where it was still at its starting spot; the clock starts there, not at the clack.
-        var still = 0
-        if let origin = path.first ?? nil {
-            while still + 1 < path.count, let next = path[still + 1], hypot(next.x - origin.x, next.y - origin.y) <= 4 { still += 1 }
-        }
-        let launch = times[still] - first
+        // The release frame is the one closest to the release time. Before it the blade was still pushing the puck,
+        // so only what happens after it counts as flight.
+        guard let release = times.indices.min(by: { abs(times[$0] - releaseTime) < abs(times[$1] - releaseTime) }),
+              // Where it left the stick: its spot on the ice in the release frame (or the last frame before it was seen).
+              let releasePixel = path[...release].last(where: { $0 != nil }) ?? nil,
+              let onIce = FloorSpot(pose: pose, lens: lens).spot(at: releasePixel)
+        else { return nil }
+        let start = SIMD3(onIce.x, onIce.y, 0)
+        let launch = times[release] - first
+
         // The puck flies from `start` with some speed in each direction, plus a steady up-or-down pull (gravity,
         // or nothing while it slides on the ice). Each frame where we saw it pins those 4 numbers down a little;
         // solve for the 4 that best fit every frame.
@@ -36,7 +40,7 @@ public struct ShotFlight {
         let fromCamera = start - pose.position
         var ata = simd_double4x4(), atb = SIMD4<Double>()
         var seen = 0, lastSeen = 0.0
-        for (i, spot) in path.enumerated() where i > still {
+        for (i, spot) in path.enumerated() where i > release {
             guard let spot else { continue }
             let t = times[i] - first - launch
             let across = (Double(spot.x) - lens.centerX) / lens.zoom, down = (Double(spot.y) - lens.centerY) / lens.zoom
@@ -62,7 +66,7 @@ public struct ShotFlight {
 
         let spot = start + velocity * time + SIMD3(0, 0, 0.5 * pull * time * time)
         crossingTime = launch + time
-        launchTime = launch
+        self.releaseTime = launch
         crossingSpot = SIMD2(spot.x, spot.z)
         distance = simd_distance(spot, start)
     }

@@ -10,8 +10,9 @@ Net coordinates, in inches: x runs along the goal line from the left post (0) to
 y runs out of the goal toward the shooter (the goal line is y = 0), z runs up from the ice.
 A puck is 3 in across, so the whole puck is over the line once its middle is 1.5 in past it (y = -1.5).
 ShotFlight gets the puck's spot in each frame from the clack on (PuckLinker), each frame's real time (slow-mo skips
-frames now and then), where it started on the ice (FloorSpot),
-and the camera's place (CameraPose). It works out the exact moment the whole puck is over the line and where.
+frames now and then), when the puck left the stick (ReleaseFinder, on the same clock as the frame times), and the
+camera's place (CameraPose). It works out where the puck left the stick, and the exact moment the whole puck is over
+the line and where.
 */
 @Suite("ShotFlight")
 struct ShotFlightTests {
@@ -89,26 +90,41 @@ struct ShotFlightTests {
     }
 
     /*
-    - Like Wali's real shots: the puck sits on the ice at the blade for 6 frames after the clack, then leaves the stick
-      and flies the straight 50 mph shot
-    - ShotFlight should find when the puck left the stick (right after the 6th frame), and the time from leaving the
-      stick to the whole puck being over the line, within a thousandth of a second
+    - Like Wali's real shots: for 8 frames after the clack the blade drags the puck 12 in along the ice, then at frame 8
+      it leaves the stick and flies the straight 50 mph shot; ShotFlight is told the release is at frame 8
+    - The clock should start at frame 8: the time from leaving the stick to the whole puck being over the line within
+      a thousandth of a second, and the crossing spot within 1 inch, without the dragged frames throwing it off
     */
-    @Test("starts the clock when the puck leaves the stick, not at the clack")
-    func clockStartsAtTheStick() throws {
+    @Test("starts the clock at the release")
+    func clockStartsAtTheRelease() throws {
         let shot = PretendShot(from: SIMD3(20, 192, 0), toward: SIMD3(50, 0, 30), mph: 50, gravity: false)
 
-        let flight = try #require(shot.flight(sittingFrames: 6))
+        let flight = try #require(shot.flight(draggedFrames: 8))
 
-        #expect(abs(flight.launchTime - 5.0 / 240) <= 0.001)
+        #expect(abs(flight.releaseTime - 8.0 / 240) <= 0.0001)
         #expect(abs(flight.flightTime - shot.wholePuckOver.time) <= 0.001)
         #expect(simd_distance(flight.crossingSpot, shot.wholePuckOver.spot) <= 1)
     }
 
     /*
+    - The same dragged shot: the puck sat 12 in away at the clack, and left the stick at (20, 192, 0)
+    - The distance should be measured from where it left the stick (within 1 inch), not from where it sat at the clack
+    */
+    @Test("measures the distance from where the puck left the stick")
+    func distanceFromTheRelease() throws {
+        let shot = PretendShot(from: SIMD3(20, 192, 0), toward: SIMD3(50, 0, 30), mph: 50, gravity: false)
+
+        let flight = try #require(shot.flight(draggedFrames: 8))
+
+        #expect(abs(flight.distance - shot.wholePuckOver.distance) <= 1, "flew \(flight.distance) in")
+    }
+
+    /*
     - Wali's first shot in the 43mph-54mph clip: puck model boxes from the clack on, linked by PuckLinker,
       starting at the puck Wali clicked at the clack; camera placed from the net (NetCornerFinder + CameraPose)
-    - ShotFlight should find a crossing a tenth to four tenths of a second after the clack, near the net
+    - The puck leaves the stick at frame 13 (checked by Wali's eye, and what ReleaseFinder finds)
+    - ShotFlight should find a crossing a tenth to four tenths of a second after the clack, near the net, and the speed
+      (distance ÷ flight time) should be within 5 mph of the radar's 43
     */
     @Test("finds the crossing in a real shot")
     func realShot() async throws {
@@ -117,17 +133,18 @@ struct ShotFlightTests {
         let frames = try await VideoFrameExtractor().frames(from: clip, between: clack, and: clack + 0.4)
         let (pose, lens) = try placeCamera("43mph-54mph")
         let startPixel = CGPoint(x: 196, y: 913)
-        let start = try #require(FloorSpot(pose: pose, lens: lens).spot(at: startPixel))
 
         let detector = PuckDetector()
         let times = frames.map { $0.seconds - frames[0].seconds }
         let path = PuckLinker().path(from: startPixel, times: times) { i, spot in detector.pucks(in: frames[i].image, near: spot) }
 
-        let flight = try #require(ShotFlight(path: path, times: times, start: SIMD3(start.x, start.y, 0), pose: pose, lens: lens))
+        let flight = try #require(ShotFlight(path: path, times: times, releaseTime: times[12], pose: pose, lens: lens))
+        let mph = flight.distance / flight.flightTime / 17.6   // 1 mph = 17.6 inches per second
 
         #expect(flight.crossingTime >= 0.1 && flight.crossingTime <= 0.4, "crossed \(flight.crossingTime) s after the clack")
         #expect(flight.crossingSpot.x >= -30 && flight.crossingSpot.x <= 102, "crossed \(flight.crossingSpot.x) in across")
         #expect(flight.crossingSpot.y >= 0 && flight.crossingSpot.y <= 70, "crossed \(flight.crossingSpot.y) in up")
+        #expect(abs(mph - 43) <= 5, "read \(mph) mph")
     }
 }
 
@@ -166,19 +183,20 @@ private struct PretendShot {
     // ShotFlight on this shot filmed at 240 frames a second, until 5 frames after the whole puck is over the line,
     // or only until the puck is `seenUntilInFront` inches in front of the line. `skipping` drops 2 frames out of every 10
     // the way iPhone slow-mo does, so the frames aren't evenly spaced.
-    // `sittingFrames` keeps the puck still at the blade for that many frames after the clack before it leaves the stick.
-    func flight(seenUntilInFront cutoff: Double? = nil, skipping: Bool = false, sittingFrames: Int = 0) -> ShotFlight? {
-        let launch = Double(max(sittingFrames - 1, 0)) / 240
-        let frames = (0..<(Int((wholePuckOver.time + launch) * 240) + 6)).filter { !skipping || ($0 % 10 != 8 && $0 % 10 != 9) }
+    // `draggedFrames`: for that many frames after the clack the blade drags the puck 12 in along the ice to `start`,
+    // then it leaves the stick; ShotFlight is told the release frame. With 0, the puck leaves the stick at the clack.
+    func flight(seenUntilInFront cutoff: Double? = nil, skipping: Bool = false, draggedFrames: Int = 0) -> ShotFlight? {
+        let release = Double(draggedFrames) / 240
+        let frames = (0..<(Int((wholePuckOver.time + release) * 240) + 6)).filter { !skipping || ($0 % 10 != 8 && $0 % 10 != 9) }
         let times = frames.map { Double($0) / 240 }
         let path: [CGPoint?] = times.map { t in
-            let p = position(at: max(0, t - launch))
+            let p = t < release ? start + SIMD3(-12, 0, 0) * (1 - t / release) : position(at: t - release)
             if let cutoff, p.y < cutoff { return nil }
             return phone.picture(of: p)
         }
         let corners = [SIMD3(0.0, 0, 48), SIMD3(72.0, 0, 48), SIMD3(72.0, 0, 0), SIMD3(0.0, 0, 0)].map(phone.picture(of:))
         guard let pose = CameraPose(corners: corners, lens: iPhoneLens) else { return nil }
-        return ShotFlight(path: path, times: times, start: start, pose: pose, lens: iPhoneLens)
+        return ShotFlight(path: path, times: times, releaseTime: release, pose: pose, lens: iPhoneLens)
     }
 }
 
