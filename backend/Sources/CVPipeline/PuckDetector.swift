@@ -54,6 +54,18 @@ public struct PuckDetector {
         return pucks
     }
 
+    // Looks only in the one 320px square around `spot`, which is much faster than the whole frame. Unlike `pucks(in:)`,
+    // the spot and the boxes are in pixels from the top-left, y down, like everything that follows the puck.
+    public func pucks(in frame: CGImage, near spot: CGPoint) -> [CGRect] {
+        let size = Self.square
+        let left = Int(min(max(spot.x - CGFloat(size) / 2, 0), CGFloat(max(0, frame.width - size))))
+        let top = Int(min(max(spot.y - CGFloat(size) / 2, 0), CGFloat(max(0, frame.height - size))))
+        guard let crop = frame.cropping(to: CGRect(x: left, y: top, width: size, height: size)) else { return [] }
+        return pucks(in: crop).map { box in
+            CGRect(x: box.minX + CGFloat(left), y: CGFloat(top) + CGFloat(crop.height) - box.maxY, width: box.width, height: box.height)
+        }
+    }
+
     // Where each square starts along one side, overlapping, with the last one flush against the edge.
     private func starts(along length: Int) -> [Int] {
         guard length > Self.square else { return [0] }

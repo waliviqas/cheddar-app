@@ -72,6 +72,25 @@ struct PuckDetectorTests {
     }
 
     /*
+    - A real frame with the resting puck at (306, 736), Wali's click, y down
+    - Searching only the 320px square around the puck should find it, reported at its spot in the whole frame (y down),
+      and everything it finds should be inside that square (the tape mark next to the puck counts too)
+    - Searching only a square of bare floor far from the puck should find nothing, even though the frame has a puck
+    */
+    @Test("searches only the square it's told to")
+    func searchesOnlyTheSquare() throws {
+        let frame = try loadRinkFrame(named: "1x-58mph-54mph-s1-rest-006.300")
+
+        let nearPuck = PuckDetector().pucks(in: frame, near: CGPoint(x: 306, y: 736))
+        let onBareFloor = PuckDetector().pucks(in: frame, near: CGPoint(x: 1160, y: 900))
+
+        let square = CGRect(x: 306 - 160, y: 736 - 160, width: 320, height: 320)
+        #expect(nearPuck.allSatisfy { square.contains(CGPoint(x: $0.midX, y: $0.midY)) }, "found \(nearPuck)")
+        #expect(nearPuck.contains { abs($0.midX - 306) <= 15 && abs($0.midY - 736) <= 15 }, "found \(nearPuck)")
+        #expect(onBareFloor.isEmpty, "found \(onBareFloor)")
+    }
+
+    /*
     - The resting puck tapped at setup, measured by eye at 18px wide (1x clip) and 28px wide (0.5x clip)
     - A puck is 3 inches, so that's about 6.0 and 9.3 pixels per inch
     - This test will expect PuckRuler, using the model, to land within 10% of each

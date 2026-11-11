@@ -4,8 +4,9 @@ import CoreGraphics
 @testable import CVPipeline
 
 /*
-PuckLinker gets every puck-looking box the puck model saw in each frame, starting at the clack frame,
-each frame's real time (slow-mo video skips frames now and then), plus where the puck is at the clack. It hands back the shot puck's spot in each frame (nil where it wasn't seen).
+PuckLinker gets each frame's real time from the clack on (slow-mo video skips frames now and then), plus where the puck
+is at the clack. Each frame it asks the puck model to look only in the 320px square around where the puck should be,
+and hands back the shot puck's spot in each frame (nil where it wasn't seen).
 Pixels are measured from the top-left, y down.
 */
 @Suite("PuckLinker")
@@ -19,7 +20,7 @@ struct PuckLinkerTests {
     func followsThePuck() {
         let truth = flight(from: CGPoint(x: 200, y: 900), step: CGPoint(x: 30, y: -6), frames: 20)
 
-        let path = PuckLinker().path(from: truth[0], through: truth.map { [box(at: $0)] }, times: evenTimes(20))
+        let path = follow(from: truth[0], through: truth.map { [box(at: $0)] }, times: evenTimes(20))
 
         #expect(path.count == 20)
         for (spot, real) in zip(path, truth) {
@@ -36,7 +37,7 @@ struct PuckLinkerTests {
         let truth = flight(from: CGPoint(x: 200, y: 900), step: CGPoint(x: 30, y: -6), frames: 10)
         let elsewhere = CGPoint(x: 1400, y: 300)
 
-        let path = PuckLinker().path(from: CGPoint(x: 205, y: 896), through: truth.map { [box(at: elsewhere), box(at: $0)] }, times: evenTimes(10))
+        let path = follow(from: CGPoint(x: 205, y: 896), through: truth.map { [box(at: elsewhere), box(at: $0)] }, times: evenTimes(10))
 
         for (spot, real) in zip(path, truth) {
             #expect(distance(spot, real) <= 1)
@@ -55,7 +56,7 @@ struct PuckLinkerTests {
         let oldPuck = CGPoint(x: 900, y: 760)
         let frames = (0..<25).map { i in (i < 15 ? [box(at: truth[i])] : []) + [box(at: oldPuck)] }
 
-        let path = PuckLinker().path(from: truth[0], through: frames, times: evenTimes(25))
+        let path = follow(from: truth[0], through: frames, times: evenTimes(25))
 
         for i in 0..<15 {
             #expect(distance(path[i], truth[i]) <= 1, "lost the shot at frame \(i)")
@@ -77,7 +78,7 @@ struct PuckLinkerTests {
         let truth = flight(from: CGPoint(x: 200, y: 900), step: CGPoint(x: 30, y: -6), frames: 16)
         let frames = truth.enumerated().map { i, p in (i == 8 || i == 9) ? [] : [box(at: p)] }
 
-        let path = PuckLinker().path(from: truth[0], through: frames, times: evenTimes(16))
+        let path = follow(from: truth[0], through: frames, times: evenTimes(16))
 
         #expect(path[8] == nil)
         #expect(path[9] == nil)
@@ -96,11 +97,69 @@ struct PuckLinkerTests {
         let kept = (0..<40).filter { $0 % 10 != 8 && $0 % 10 != 9 }
         let truth = kept.map { CGPoint(x: 200 + 30 * CGFloat($0), y: 900 - 6 * CGFloat($0)) }
 
-        let path = PuckLinker().path(from: truth[0], through: truth.map { [box(at: $0)] }, times: kept.map { Double($0) / 240 })
+        let path = follow(from: truth[0], through: truth.map { [box(at: $0)] }, times: kept.map { Double($0) / 240 })
 
         #expect(path.count == truth.count)
         for (spot, real) in zip(path, truth) {
             #expect(distance(spot, real) <= 1)
+        }
+    }
+
+    /*
+    - Like Wali's real shots: the puck sits at the blade for 6 frames after the clack, then leaves the stick
+      and flies 40 px right and 8 px up every frame
+    - The path should stay on it while it sits there, catch it the moment it takes off, and follow it the whole way
+    */
+    @Test("waits at the stick, then catches the puck when it takes off")
+    func catchesTheTakeoff() {
+        let truth = Array(repeating: CGPoint(x: 200, y: 900), count: 6)
+            + (1...20).map { CGPoint(x: 200 + 40 * CGFloat($0), y: 900 - 8 * CGFloat($0)) }
+
+        let path = follow(from: truth[0], through: truth.map { [box(at: $0)] }, times: evenTimes(truth.count))
+
+        for (i, (spot, real)) in zip(path, truth).enumerated() {
+            #expect(distance(spot, real) <= 1, "frame \(i)")
+        }
+    }
+
+    /*
+    - Like Wali's real shots: the blade pushes the puck along and it speeds up as it leaves, from about 12 px a frame
+      to 30, with the puck model's box wobbling a few pixels each frame
+    - The path should stay on it the whole way instead of losing it when it suddenly speeds up
+    */
+    @Test("keeps following the puck as it speeds up off the blade")
+    func followsASpeedingUpPuck() {
+        let steps: [CGFloat] = [12, 16, 10, 18, 21, 9, 35, 27, 29, 26, 30, 28, 29, 31, 28, 30, 29, 30]
+        var truth = [CGPoint(x: 230, y: 910)]
+        for (k, step) in steps.enumerated() {
+            let wobble: CGFloat = k % 2 == 0 ? 2 : -2
+            truth.append(CGPoint(x: truth.last!.x + step, y: truth.last!.y - step * 0.15 + wobble))
+        }
+
+        let path = follow(from: truth[0], through: truth.map { [box(at: $0)] }, times: evenTimes(truth.count))
+
+        for (i, (spot, real)) in zip(path, truth).enumerated() {
+            #expect(distance(spot, real) <= 1, "frame \(i)")
+        }
+    }
+
+    /*
+    - A puck flies 40 px right and 8 px up every frame for 20 frames
+    - Every frame, PuckLinker's first look should be a square centered within 50 px of where the puck really is,
+      and it should never look at more than 3 squares in one frame (looking everywhere is what made it slow)
+    */
+    @Test("looks where the puck should be next")
+    func looksWhereThePuckShouldBe() {
+        let truth = flight(from: CGPoint(x: 200, y: 900), step: CGPoint(x: 40, y: -8), frames: 20)
+        let detector = FakeDetector(truth.map { [box(at: $0)] })
+
+        _ = PuckLinker().path(from: truth[0], times: evenTimes(20), lookingNear: detector.look)
+
+        for (i, real) in truth.enumerated() {
+            let looks = detector.looks.filter { $0.frame == i }
+            let first = looks.first?.around
+            #expect(first.map { hypot($0.x - real.x, $0.y - real.y) <= 50 } == true, "frame \(i): first looked around \(String(describing: first)), puck at \(real)")
+            #expect(looks.count <= 3, "frame \(i): looked at \(looks.count) squares")
         }
     }
 
@@ -118,16 +177,35 @@ struct PuckLinkerTests {
         let netMiddle = CGPoint(x: 1610, y: 830)
 
         let detector = PuckDetector()
-        let boxes = frames.map { frame in
-            // The puck model measures y from the bottom; flip to y down like everything else.
-            detector.pucks(in: frame.image).map { CGRect(x: $0.minX, y: CGFloat(frame.image.height) - $0.maxY, width: $0.width, height: $0.height) }
+
+        let path = PuckLinker().path(from: start, times: frames.map { $0.seconds - frames[0].seconds }) { i, spot in
+            detector.pucks(in: frames[i].image, near: spot)
         }
-        let path = PuckLinker().path(from: start, through: boxes, times: frames.map { $0.seconds - frames[0].seconds })
 
         let seen = path.compactMap { $0 }
         #expect(seen.count >= 15, "only followed the puck for \(seen.count) frames")
         let last = try #require(seen.last)
         #expect(distance(start, netMiddle) - distance(last, netMiddle) >= 600, "ended at \(last)")
+    }
+}
+
+// Follows a made-up shot, handing the boxes over through a fake puck model.
+private func follow(from start: CGPoint, through frames: [[CGRect]], times: [Double]) -> [CGPoint?] {
+    PuckLinker().path(from: start, times: times, lookingNear: FakeDetector(frames).look)
+}
+
+// Stands in for the puck model: holds made-up boxes for each frame and, when asked to look around a spot, answers with
+// only the boxes inside the 320px square there. Remembers every square it was asked about.
+private final class FakeDetector {
+    private let frames: [[CGRect]]
+    private(set) var looks: [(frame: Int, around: CGPoint)] = []
+
+    init(_ frames: [[CGRect]]) { self.frames = frames }
+
+    func look(_ frame: Int, _ around: CGPoint) -> [CGRect] {
+        looks.append((frame, around))
+        let square = CGRect(x: around.x - 160, y: around.y - 160, width: 320, height: 320)
+        return frames[frame].filter { square.contains(CGPoint(x: $0.midX, y: $0.midY)) }
     }
 }
 

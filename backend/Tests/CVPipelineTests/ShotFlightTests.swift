@@ -89,6 +89,23 @@ struct ShotFlightTests {
     }
 
     /*
+    - Like Wali's real shots: the puck sits on the ice at the blade for 6 frames after the clack, then leaves the stick
+      and flies the straight 50 mph shot
+    - ShotFlight should find when the puck left the stick (right after the 6th frame), and the time from leaving the
+      stick to the whole puck being over the line, within a thousandth of a second
+    */
+    @Test("starts the clock when the puck leaves the stick, not at the clack")
+    func clockStartsAtTheStick() throws {
+        let shot = PretendShot(from: SIMD3(20, 192, 0), toward: SIMD3(50, 0, 30), mph: 50, gravity: false)
+
+        let flight = try #require(shot.flight(sittingFrames: 6))
+
+        #expect(abs(flight.launchTime - 5.0 / 240) <= 0.001)
+        #expect(abs(flight.flightTime - shot.wholePuckOver.time) <= 0.001)
+        #expect(simd_distance(flight.crossingSpot, shot.wholePuckOver.spot) <= 1)
+    }
+
+    /*
     - Wali's first shot in the 43mph-54mph clip: puck model boxes from the clack on, linked by PuckLinker,
       starting at the puck Wali clicked at the clack; camera placed from the net (NetCornerFinder + CameraPose)
     - ShotFlight should find a crossing a tenth to four tenths of a second after the clack, near the net
@@ -103,11 +120,8 @@ struct ShotFlightTests {
         let start = try #require(FloorSpot(pose: pose, lens: lens).spot(at: startPixel))
 
         let detector = PuckDetector()
-        let boxes = frames.map { frame in
-            detector.pucks(in: frame.image).map { CGRect(x: $0.minX, y: CGFloat(frame.image.height) - $0.maxY, width: $0.width, height: $0.height) }
-        }
         let times = frames.map { $0.seconds - frames[0].seconds }
-        let path = PuckLinker().path(from: startPixel, through: boxes, times: times)
+        let path = PuckLinker().path(from: startPixel, times: times) { i, spot in detector.pucks(in: frames[i].image, near: spot) }
 
         let flight = try #require(ShotFlight(path: path, times: times, start: SIMD3(start.x, start.y, 0), pose: pose, lens: lens))
 
@@ -152,11 +166,13 @@ private struct PretendShot {
     // ShotFlight on this shot filmed at 240 frames a second, until 5 frames after the whole puck is over the line,
     // or only until the puck is `seenUntilInFront` inches in front of the line. `skipping` drops 2 frames out of every 10
     // the way iPhone slow-mo does, so the frames aren't evenly spaced.
-    func flight(seenUntilInFront cutoff: Double? = nil, skipping: Bool = false) -> ShotFlight? {
-        let frames = (0..<(Int(wholePuckOver.time * 240) + 6)).filter { !skipping || ($0 % 10 != 8 && $0 % 10 != 9) }
+    // `sittingFrames` keeps the puck still at the blade for that many frames after the clack before it leaves the stick.
+    func flight(seenUntilInFront cutoff: Double? = nil, skipping: Bool = false, sittingFrames: Int = 0) -> ShotFlight? {
+        let launch = Double(max(sittingFrames - 1, 0)) / 240
+        let frames = (0..<(Int((wholePuckOver.time + launch) * 240) + 6)).filter { !skipping || ($0 % 10 != 8 && $0 % 10 != 9) }
         let times = frames.map { Double($0) / 240 }
         let path: [CGPoint?] = times.map { t in
-            let p = position(at: t)
+            let p = position(at: max(0, t - launch))
             if let cutoff, p.y < cutoff { return nil }
             return phone.picture(of: p)
         }

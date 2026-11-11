@@ -11,8 +11,9 @@ def api(method, url, body=None, headers=None):
     with urllib.request.urlopen(urllib.request.Request(url, data=body, method=method, headers=h), timeout=600) as r:
         return json.load(r)
 
+# Extra frame names (like measured-43mph-49mph) can be passed after the clips folder.
 names = ["measured-" + e["clip"].split("/")[-1][:-4] for e in json.load(open(f"{CLIPS}/net-outline.json"))] + \
-        [e["clip"].split("/")[-1][:-4] for e in json.load(open(f"{CLIPS}/net-corners.json"))]
+        [e["clip"].split("/")[-1][:-4] for e in json.load(open(f"{CLIPS}/net-corners.json"))] + sys.argv[2:]
 for name in names:
     out = f"{OUT}/{name}.png"
     if os.path.exists(out): continue

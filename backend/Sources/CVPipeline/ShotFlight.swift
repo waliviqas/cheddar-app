@@ -11,6 +11,8 @@ public struct ShotFlight {
     public let crossingTime: Double            // seconds after the clack frame
     public let crossingSpot: SIMD2<Double>     // where the puck's middle was right then: inches across, inches up
     public let distance: Double                // inches the puck flew from where it started to that spot
+    public let launchTime: Double              // seconds after the clack frame when the puck left the stick
+    public var flightTime: Double { crossingTime - launchTime }   // from leaving the stick to the whole puck over the line
 
     static let puckRadius = 1.5                // a puck is 3 in across
     static let maxUnseenBeforeLine = 4.0 / 240 // how long the puck can go unseen right before the line and still count
@@ -19,6 +21,13 @@ public struct ShotFlight {
     // in seconds after the clack frame (slow-mo skips frames now and then), `start` is where it sat on the ice.
     public init?(path: [CGPoint?], times: [Double], start: SIMD3<Double>, pose: CameraPose, lens: LensInfo) {
         guard path.count == times.count, let first = times.first else { return nil }
+        // The puck often sits at the blade for a few frames after the clack. It left the stick right after the last
+        // frame where it was still at its starting spot; the clock starts there, not at the clack.
+        var still = 0
+        if let origin = path.first ?? nil {
+            while still + 1 < path.count, let next = path[still + 1], hypot(next.x - origin.x, next.y - origin.y) <= 4 { still += 1 }
+        }
+        let launch = times[still] - first
         // The puck flies from `start` with some speed in each direction, plus a steady up-or-down pull (gravity,
         // or nothing while it slides on the ice). Each frame where we saw it pins those 4 numbers down a little;
         // solve for the 4 that best fit every frame.
@@ -27,9 +36,9 @@ public struct ShotFlight {
         let fromCamera = start - pose.position
         var ata = simd_double4x4(), atb = SIMD4<Double>()
         var seen = 0, lastSeen = 0.0
-        for (i, spot) in path.enumerated() where i > 0 {
+        for (i, spot) in path.enumerated() where i > still {
             guard let spot else { continue }
-            let t = times[i] - first
+            let t = times[i] - first - launch
             let across = (Double(spot.x) - lens.centerX) / lens.zoom, down = (Double(spot.y) - lens.centerY) / lens.zoom
             // The puck's direction from the camera has to match where it showed up in the picture: two equations per frame.
             for w in [rows[0] - across * rows[2], rows[1] - down * rows[2]] {
@@ -52,7 +61,8 @@ public struct ShotFlight {
         guard time > 0, time - lastSeen <= Self.maxUnseenBeforeLine else { return nil }
 
         let spot = start + velocity * time + SIMD3(0, 0, 0.5 * pull * time * time)
-        crossingTime = time
+        crossingTime = launch + time
+        launchTime = launch
         crossingSpot = SIMD2(spot.x, spot.z)
         distance = simd_distance(spot, start)
     }
