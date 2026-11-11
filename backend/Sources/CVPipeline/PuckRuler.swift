@@ -8,11 +8,26 @@ public struct PuckRuler {
 
     // Asks PuckDetector for the puck nearest the tap, measures its real width, then divides by the puck's 3 inches.
     public func pixelsPerInch(in frame: CGImage, tappedAt tap: CGPoint) -> Double? {
-        let nearest = PuckDetector().pucks(in: frame).min {
-            hypot($0.midX - tap.x, $0.midY - tap.y) < hypot($1.midX - tap.x, $1.midY - tap.y)
-        }
-        guard let box = nearest, let width = puckWidth(in: frame, around: box) else { return nil }
+        guard let box = nearestPuck(in: frame, to: tap), let width = puckWidth(in: frame, around: box) else { return nil }
         return Double(width) / 3
+    }
+
+    // Measures the puck nearest the given spot in every frame and uses the middle width,
+    // so a few odd frames, like a flip, a blur, or a miss, don't change the answer.
+    public func pixelsPerInch(in frames: [(image: CGImage, spot: CGPoint)]) -> Double? {
+        let widths = frames.compactMap { frame -> Int? in
+            guard let box = nearestPuck(in: frame.image, to: frame.spot) else { return nil }
+            return puckWidth(in: frame.image, around: box)
+        }.sorted()
+        guard !widths.isEmpty else { return nil }
+        return Double(widths[widths.count / 2]) / 3
+    }
+
+    // The puck PuckDetector finds closest to a spot, in pixels with y measured from the bottom.
+    private func nearestPuck(in frame: CGImage, to spot: CGPoint) -> CGRect? {
+        return PuckDetector().pucks(in: frame).min {
+            hypot($0.midX - spot.x, $0.midY - spot.y) < hypot($1.midX - spot.x, $1.midY - spot.y)
+        }
     }
 
     // The model's box is loose, so the edges are found inside it: starting from the pixel least like the floor around

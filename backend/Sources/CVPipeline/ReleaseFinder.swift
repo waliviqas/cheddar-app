@@ -72,8 +72,11 @@ public struct ReleaseFinder: Sendable {
             for try await (i, gone) in group where gone { left.insert(i) }
             return left
         }
-        // The release is the earliest LEFT that the next frame backs up, so one wrong answer can't start the clock early.
-        return left.sorted().first { left.contains($0 + 1) }.map { frames[$0].seconds }
+        // Before the blade reaches the puck there's a gap too, so a LEFT only counts after the puck was seen touching the
+        // blade. The release is the earliest such LEFT that the next frame backs up, so one wrong answer can't start the
+        // clock early.
+        guard let touched = pictures.map(\.frame).first(where: { !left.contains($0) }) else { return nil }
+        return left.sorted().first { $0 > touched && left.contains($0 + 1) }.map { frames[$0].seconds }
     }
 
     private func closeUp(of image: CGImage, around spot: CGPoint) -> CGImage? {

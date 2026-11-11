@@ -11,8 +11,8 @@ y runs out of the goal toward the shooter (the goal line is y = 0), z runs up fr
 A puck is 3 in across, so the whole puck is over the line once its middle is 1.5 in past it (y = -1.5).
 ShotFlight gets the puck's spot in each frame from the clack on (PuckLinker), each frame's real time (slow-mo skips
 frames now and then), when the puck left the stick (ReleaseFinder, on the same clock as the frame times), and the
-camera's place (CameraPose). It works out where the puck left the stick, and the exact moment the whole puck is over
-the line and where.
+camera's place (CameraPose). It works out where the puck left the stick, how fast it left (from the 20 frames right
+after the release), and the exact moment the whole puck is over the line and where.
 */
 @Suite("ShotFlight")
 struct ShotFlightTests {
@@ -120,11 +120,42 @@ struct ShotFlightTests {
     }
 
     /*
+    - A pretend puck leaves the stick at 50 mph and slows down on the way to the net (pulled back 600 in/s every second)
+    - The release speed should be how fast it left the stick (within 1.5 mph of 50), and faster than its average speed
+      all the way to the net
+    */
+    @Test("reads the speed the puck left the stick at, not its average")
+    func releaseSpeed() throws {
+        let shot = PretendShot(from: SIMD3(20, 192, 0), toward: SIMD3(50, 0, 30), mph: 50, gravity: false, slowing: 600)
+
+        let flight = try #require(shot.flight())
+
+        #expect(abs(flight.releaseMph - 50) <= 1.5, "read \(flight.releaseMph) mph")
+        let average = shot.wholePuckOver.distance / shot.wholePuckOver.time / 17.6   // its real average speed to the line
+        #expect(flight.releaseMph > average, "release \(flight.releaseMph) mph, real average \(average) mph")
+    }
+
+    /*
+    - The straight 50 mph shot, but the video skips 2 frames out of every 10, some of them inside the 20 frames after
+      the release
+    - The release speed should still be 50 mph (within half a mph), using each frame's real time
+    */
+    @Test("reads the release speed when the video skips frames")
+    func releaseSpeedSkippedFrames() throws {
+        let shot = PretendShot(from: SIMD3(20, 192, 0), toward: SIMD3(50, 0, 30), mph: 50, gravity: false)
+
+        let flight = try #require(shot.flight(skipping: true))
+
+        #expect(abs(flight.releaseMph - 50) <= 0.5, "read \(flight.releaseMph) mph")
+    }
+
+    /*
     - Wali's first shot in the 43mph-54mph clip: puck model boxes from the clack on, linked by PuckLinker,
       starting at the puck Wali clicked at the clack; camera placed from the net (NetCornerFinder + CameraPose)
     - The puck leaves the stick at frame 13 (checked by Wali's eye, and what ReleaseFinder finds)
-    - ShotFlight should find a crossing a tenth to four tenths of a second after the clack, near the net, and the speed
-      (distance ÷ flight time) should be within 5 mph of the radar's 43
+    - ShotFlight should find a crossing a tenth to four tenths of a second after the clack, near the net, and the
+      release speed should be within 5 mph of 48.6, the speed measured from the puck's own 3-inch size in the frames
+      after the release (no camera math). The radar read 43, but it reads low when the shot isn't straight at it.
     */
     @Test("finds the crossing in a real shot")
     func realShot() async throws {
@@ -139,12 +170,11 @@ struct ShotFlightTests {
         let path = PuckLinker().path(from: startPixel, times: times) { i, spot in detector.pucks(in: frames[i].image, near: spot) }
 
         let flight = try #require(ShotFlight(path: path, times: times, releaseTime: times[12], pose: pose, lens: lens))
-        let mph = flight.distance / flight.flightTime / 17.6   // 1 mph = 17.6 inches per second
 
         #expect(flight.crossingTime >= 0.1 && flight.crossingTime <= 0.4, "crossed \(flight.crossingTime) s after the clack")
         #expect(flight.crossingSpot.x >= -30 && flight.crossingSpot.x <= 102, "crossed \(flight.crossingSpot.x) in across")
         #expect(flight.crossingSpot.y >= 0 && flight.crossingSpot.y <= 70, "crossed \(flight.crossingSpot.y) in up")
-        #expect(abs(mph - 43) <= 5, "read \(mph) mph")
+        #expect(abs(flight.releaseMph - 48.6) <= 5, "read \(flight.releaseMph) mph")
     }
 }
 
@@ -157,10 +187,12 @@ private struct PretendShot {
     let start: SIMD3<Double>
     let velocity: SIMD3<Double>   // inches per second as it leaves the stick
     let pull: Double              // downward pull on the puck (0 for a straight shot)
+    let slowing: Double           // how much it slows down along its path, inches per second every second (0 = steady)
     let phone = PretendPhone(at: SIMD3(-30, 233, 61.5), aimedAt: SIMD3(60, 0, 24))
 
-    init(from start: SIMD3<Double>, toward target: SIMD3<Double>, mph: Double, gravity: Bool) {
+    init(from start: SIMD3<Double>, toward target: SIMD3<Double>, mph: Double, gravity: Bool, slowing: Double = 0) {
         self.start = start
+        self.slowing = slowing
         pull = gravity ? gravityPull : 0
         let speed = mph * 17.6   // 1 mph = 17.6 inches per second
         // Aim so the puck's middle reaches `target` on the goal line, even with gravity pulling it down on the way.
@@ -169,10 +201,16 @@ private struct PretendShot {
         velocity = SIMD3(straight.x, straight.y, straight.z + 0.5 * pull * time)
     }
 
-    func position(at t: Double) -> SIMD3<Double> { start + velocity * t + SIMD3(0, 0, -0.5 * pull * t * t) }
+    // How far along its path it's gone by `t`, in "seconds at the starting speed" (just `t` when it doesn't slow down).
+    private func along(_ t: Double) -> Double { t - 0.5 * slowing / simd_length(velocity) * t * t }
 
-    // When the middle of the puck is `y` in from the goal line (it only moves toward the net, at a steady rate).
-    func time(atY y: Double) -> Double { (y - start.y) / velocity.y }
+    func position(at t: Double) -> SIMD3<Double> { start + velocity * along(t) + SIMD3(0, 0, -0.5 * pull * t * t) }
+
+    // When the middle of the puck is `y` in from the goal line (it only moves toward the net).
+    func time(atY y: Double) -> Double {
+        let a = (y - start.y) / velocity.y, k = slowing / simd_length(velocity)
+        return k == 0 ? a : (1 - (1 - 2 * k * a).squareRoot()) / k
+    }
 
     var wholePuckOver: (time: Double, spot: SIMD2<Double>, distance: Double) {
         let t = time(atY: -1.5), p = position(at: t)

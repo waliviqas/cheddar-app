@@ -1,0 +1,51 @@
+{
+  "activityEntities" : [
+    "dataSourceTrainingStarted",
+    [
+      {
+        "createdDate" : "2026-10-24T01:21:47Z",
+        "event" : "dataSourceTrainingStarted",
+        "id" : "67EDFA81-8E5C-42C1-874B-BAFE06674B0C",
+        "subtitle" : "CheddarPuckDetector 2",
+        "title" : "Used By"
+      }
+    ],
+    "dataSourceCreated",
+    [
+      {
+        "createdDate" : "2026-10-24T01:20:30Z",
+        "event" : "dataSourceCreated",
+        "id" : "5AC89E79-83ED-4B0A-A171-12BF9589D61F",
+        "subtitle" : "training-crops",
+        "title" : "Data Source Created"
+      }
+    ],
+    "dataSourceMetrics",
+    [
+      {
+        "createdDate" : "2026-10-24T01:21:47Z",
+        "event" : "dataSourceMetrics",
+        "id" : "455AFB5D-32D7-467E-AFEC-44DCEF554320",
+        "subtitle" : "1 Classes, 2,008 Items",
+        "title" : "Data Summary"
+      }
+    ]
+  ],
+  "createdDate" : "2026-10-24T01:20:30Z",
+  "dataPathRelativeToProjectURL" : "../../videos/rink-clips/training-crops/",
+  "dataResult" : {
+    "createdDate" : "2026-10-24T01:20:30Z",
+    "dataSourceID" : "45483BF3-A460-42DF-9D3B-A8B5D2BF7B31",
+    "dataURL" : "file:///Users/waliviqas/personal-projects/cheddar-app/backend/videos/rink-clips/training-crops/"
+  },
+  "dataURL" : "file:///Users/waliviqas/personal-projects/cheddar-app/backend/videos/rink-clips/training-crops/",
+  "experimentIDs" : [
+    "1FB4A6BF-8EA6-435B-9764-58271E6FBCCC"
+  ],
+  "id" : "45483BF3-A460-42DF-9D3B-A8B5D2BF7B31",
+  "modifiedDate" : "2026-10-24T01:21:47Z",
+  "pathType" : 0,
+  "preferredFilename" : "training-crops",
+  "title" : "training-crops",
+  "version" : "1.0"
+}

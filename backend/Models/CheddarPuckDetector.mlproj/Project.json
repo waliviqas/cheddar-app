@@ -1,0 +1,29 @@
+{
+  "activityEntities" : [
+    "projectCreated",
+    [
+      {
+        "createdDate" : "2026-10-23T23:56:44Z",
+        "event" : "projectCreated",
+        "id" : "C40ED9DD-D9A0-4B0C-B53E-E495525C70E4",
+        "subtitle" : "CheddarPuckDetector",
+        "title" : "Project Created"
+      }
+    ]
+  ],
+  "authorName" : "Wali Viqas",
+  "createdDate" : "2026-10-23T23:56:44Z",
+  "description" : "",
+  "id" : "B29A749C-7310-46C1-9F41-3F4D0FA57015",
+  "license" : "",
+  "location" : "",
+  "modifiedDate" : "2026-10-23T23:56:44Z",
+  "projectName" : "CheddarPuckDetector",
+  "settingsEntity" : {
+    "snapshotOnExtendTraining" : true,
+    "snapshotOnResumeTraining" : false
+  },
+  "taskType" : "objectDetector",
+  "title" : "Object Detection",
+  "version" : "1.1"
+}

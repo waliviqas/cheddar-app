@@ -46,6 +46,21 @@ struct ReleaseFinderTests {
     }
 
     /*
+    - Like a read that starts a bit early: in the first close-ups the blade hasn't reached the puck yet, so there's a
+      gap and the fake OpenAI says LEFT for frames 0–3. Then TOUCHING for 4–8 (the blade pushing it), then LEFT from 9 on
+    - ReleaseFinder should only count a LEFT after it has seen the puck touching the blade: frame 9's time
+    */
+    @Test("ignores LEFTs before the blade reaches the puck")
+    func ignoresLeftsBeforeTheBlade() async throws {
+        let openAI = FakeOpenAI(leavesAt: 9, strayLeft: [0, 1, 2, 3])
+        let frames = numberedFrames(20)
+
+        let release = try await ReleaseFinder(apiKey: "test-key", send: openAI.send).releaseTime(in: frames, path: puck(movingAt: 3, frames: 20))
+
+        #expect(release == frames[9].seconds)
+    }
+
+    /*
     - 42 frames; the puck sits on the blade until frame 15, then starts moving
     - ReleaseFinder should ask about exactly frames 5 to 40 (10 before the moving point to 25 after), all at once
     */

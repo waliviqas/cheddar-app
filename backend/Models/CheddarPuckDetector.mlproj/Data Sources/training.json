@@ -1,0 +1,51 @@
+{
+  "activityEntities" : [
+    "dataSourceCreated",
+    [
+      {
+        "createdDate" : "2026-10-23T23:58:03Z",
+        "event" : "dataSourceCreated",
+        "id" : "4FE04491-F124-4D6E-A2C4-B52F0398AB2A",
+        "subtitle" : "training",
+        "title" : "Data Source Created"
+      }
+    ],
+    "dataSourceMetrics",
+    [
+      {
+        "createdDate" : "2026-10-23T23:59:24Z",
+        "event" : "dataSourceMetrics",
+        "id" : "535E9725-839C-4366-9A77-2222311E3525",
+        "subtitle" : "1 Classes, 1,160 Items",
+        "title" : "Data Summary"
+      }
+    ],
+    "dataSourceTrainingStarted",
+    [
+      {
+        "createdDate" : "2026-10-23T23:59:24Z",
+        "event" : "dataSourceTrainingStarted",
+        "id" : "6E6733C8-167F-44D4-A8DA-43EA0B49528C",
+        "subtitle" : "CheddarPuckDetector 1",
+        "title" : "Used By"
+      }
+    ]
+  ],
+  "createdDate" : "2026-10-23T23:58:03Z",
+  "dataPathRelativeToProjectURL" : "../../videos/rink-clips/training/",
+  "dataResult" : {
+    "createdDate" : "2026-10-23T23:58:03Z",
+    "dataSourceID" : "B0AED987-399B-440F-9E74-058556C20B29",
+    "dataURL" : "file:///Users/waliviqas/personal-projects/cheddar-app/backend/videos/rink-clips/training/"
+  },
+  "dataURL" : "file:///Users/waliviqas/personal-projects/cheddar-app/backend/videos/rink-clips/training/",
+  "experimentIDs" : [
+    "0DD2BDFF-4092-42DF-A005-2B4631EA2DE1"
+  ],
+  "id" : "B0AED987-399B-440F-9E74-058556C20B29",
+  "modifiedDate" : "2026-10-23T23:59:24Z",
+  "pathType" : 0,
+  "preferredFilename" : "training",
+  "title" : "training",
+  "version" : "1.0"
+}
