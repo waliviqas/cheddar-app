@@ -8,6 +8,7 @@ struct CheddarApp: App {
     var body: some Scene {
         WindowGroup {
             LandingView()
+                .preferredColorScheme(.dark)
         }
     }
 }

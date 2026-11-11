@@ -66,3 +66,5 @@ cool-pictures/
 
 # Segment Anything model files (downloaded from Hugging Face, too big for GitHub)
 backend/Models/SAM2.1-Large/
+
+ui/Cheddar/DemoClips/
