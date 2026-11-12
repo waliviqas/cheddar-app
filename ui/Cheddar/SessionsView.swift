@@ -33,12 +33,6 @@ struct SessionsView: View {
                 SessionVideoView(session: session, url: url)
             }
         }
-        .toolbar {
-            NavigationLink(value: Route.shotMap) {
-                Label("Shot Map", systemImage: "scope")
-                    .labelStyle(.titleAndIcon)
-            }
-        }
     }
 }
 

@@ -6,7 +6,6 @@ and Sessions. Start Session on the Home tab opens the turn-your-phone screen.
 */
 enum Route: Hashable {
     case session(Session.ID)
-    case shotMap
 }
 
 struct HomeView: View {
@@ -46,8 +45,6 @@ struct HomeView: View {
                             if let session = store.session(id) {
                                 SessionDetailView(session: session)
                             }
-                        case .shotMap:
-                            ShotMapView()
                         }
                     }
             }
