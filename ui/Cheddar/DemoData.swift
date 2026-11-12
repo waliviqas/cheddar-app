@@ -59,6 +59,12 @@ enum Demo {
         netCorners.last { seconds >= $0.from }?.corners ?? netCorners[0].corners
     }
 
+    // The session logged live in the Nov 11 demo: the 5 shots above, over the 29 s session video.
+    static let nov11: Session = {
+        let date = Calendar.current.date(from: DateComponents(year: 2026, month: 11, day: 11, hour: 14, minute: 0)) ?? .now
+        return Session(date: date, cover: "SessionLive", shots: liveShots, duration: 29)
+    }()
+
     // The 1x clips from Oct 23 in the order they were filmed: 58-54, 41-49, 49-49 (third shot), 49-49, 45-40.
     static let oct23: Session = {
         let speeds: [Double] = [58, 54, 41, 49, 49, 49, 49, 49, 45, 40]

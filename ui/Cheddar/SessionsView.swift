@@ -88,6 +88,8 @@ struct Stat: View {
             Text(value)
                 .font(Theme.display(30))
                 .foregroundStyle(highlight ? Theme.cheddar : .white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
         }
         .frame(minWidth: 70, alignment: .leading)
     }

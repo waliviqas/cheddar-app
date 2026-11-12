@@ -3,95 +3,159 @@ import Observation
 import SwiftUI
 
 /*
-This screen's only job is: replay one shot — the clip slows down as the stick hits the puck,
-then the speed and net square pop up.
+This screen's only job is: replay one shot, slowing down as the stick hits the puck, with the shot's speed
+and net square shown the whole time. Upright, the numbers sit under the video; sideways, beside it.
 */
 struct ShotReplayView: View {
     let shot: Shot
     @State private var model: ReplayModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.verticalSizeClass) private var verticalSize
 
     init(shot: Shot) {
         self.shot = shot
         _model = State(initialValue: ReplayModel(clip: shot.clip.flatMap(Demo.video)))
     }
 
+    private var sideways: Bool { verticalSize == .compact }
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            ReplayLayerView(player: model.player)
-                .ignoresSafeArea()
-            HStack {
-                Spacer()
-                if model.revealed {
-                    ShotPopView(shot: shot)
-                        .padding(.trailing, 24)
-                        .transition(.scale(scale: 0.7).combined(with: .opacity))
+            if sideways {
+                HStack(spacing: 20) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        closeButton
+                        video
+                    }
+                    info.frame(width: 250)
                 }
-            }
-            VStack {
-                HStack(spacing: 10) {
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark")
-                            .font(.headline)
-                            .foregroundStyle(.white)
-                            .frame(width: 40, height: 40)
-                            .background(.ultraThinMaterial, in: Circle())
-                    }
-                    Text("SHOT \(shot.id) · REPLAY")
-                        .font(.caption.weight(.bold))
-                        .kerning(1.5)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .background(.ultraThinMaterial, in: Capsule())
-                    if model.slow {
-                        Text("SLOW-MO")
-                            .font(.caption.weight(.bold))
-                            .kerning(1.5)
-                            .foregroundStyle(Theme.cheddar)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                            .background(.ultraThinMaterial, in: Capsule())
-                    }
+                .padding(.horizontal, 12)
+            } else {
+                VStack(alignment: .leading, spacing: 20) {
+                    closeButton
+                    video
+                    info
                     Spacer()
-                    if model.finished {
-                        Button { model.play() } label: {
-                            Label("Watch Again", systemImage: "arrow.counterclockwise")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(Theme.navy)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 10)
-                                .background(Theme.cheddar, in: Capsule())
-                        }
-                    }
                 }
-                Spacer()
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
-            .environment(\.colorScheme, .dark)
         }
-        .animation(.spring(response: 0.4, dampingFraction: 0.75), value: model.revealed)
-        .animation(.easeInOut(duration: 0.2), value: model.finished)
+        .environment(\.colorScheme, .dark)
+        .animation(.easeInOut(duration: 0.2), value: model.slow)
         .onAppear { model.play() }
         .onDisappear { model.stop() }
         .persistentSystemOverlays(.hidden)
     }
+
+    // The clip with its labels on top: "SHOT N · REPLAY", plus SLOW-MO while it's slowed down.
+    private var video: some View {
+        ReplayLayerView(player: model.player)
+            .aspectRatio(16 / 9, contentMode: .fit)
+            .overlay(alignment: .topLeading) {
+                HStack(spacing: 8) {
+                    badge("SHOT \(shot.id) · REPLAY", color: .white)
+                    if model.slow {
+                        badge("SLOW-MO", color: Theme.cheddar)
+                    }
+                }
+                .padding(12)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private var closeButton: some View {
+        Button { dismiss() } label: {
+            Image(systemName: "xmark")
+                .font(.headline)
+                .foregroundStyle(.white)
+                .frame(width: 40, height: 40)
+                .background(.ultraThinMaterial, in: Circle())
+        }
+    }
+
+    private func badge(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(.caption.weight(.bold))
+            .kerning(1.5)
+            .foregroundStyle(color)
+            .fixedSize()
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(.ultraThinMaterial, in: Capsule())
+    }
+
+    // The shot's numbers, always on screen: speed, where it went in the net, and a way to watch it again.
+    private var info: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("SHOT \(shot.id)")
+                .font(.caption.weight(.bold))
+                .kerning(2)
+                .foregroundStyle(Theme.cheddar)
+            if sideways {
+                speed
+                net
+            } else {
+                HStack {
+                    speed
+                    Spacer()
+                    net
+                }
+            }
+            Button { model.play() } label: {
+                Label("Watch Again", systemImage: "arrow.counterclockwise")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.navy)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Theme.cheddar, in: Capsule())
+            }
+        }
+        .padding(20)
+        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Theme.cheddar.opacity(0.5), lineWidth: 1.5))
+    }
+
+    private var speed: some View {
+        HStack(alignment: .lastTextBaseline, spacing: 6) {
+            Text(shot.mph.mphText)
+                .font(Theme.display(64))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            Text("MPH")
+                .font(.headline.weight(.heavy))
+                .kerning(2)
+                .foregroundStyle(.white.opacity(0.7))
+                .fixedSize()
+        }
+    }
+
+    @ViewBuilder
+    private var net: some View {
+        if let square = shot.square {
+            VStack(spacing: 6) {
+                NetSquareView(square: square)
+                    .frame(width: 120)
+                Text(square.label)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.cheddar)
+            }
+        }
+    }
 }
 
-// Plays the clip at normal speed, drops to slow motion around the hit, and says when to show the number.
+// Plays the clip at normal speed and drops to slow motion around the hit.
 @MainActor
 @Observable
 final class ReplayModel {
     static let slowFrom = Demo.replayShotAt - 0.5
     static let slowUntil = Demo.replayShotAt + 0.6
-    static let revealAt = Demo.replayShotAt + 0.35
     static let slowRate: Float = 0.25
 
     let player = AVPlayer()
     private(set) var slow = false
-    private(set) var revealed = false
     private(set) var finished = false
     private var timeObserver: Any?
     private var endObserver: NSObjectProtocol?
@@ -110,7 +174,6 @@ final class ReplayModel {
 
     func play() {
         finished = false
-        revealed = false
         slow = false
         player.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
             MainActor.assumeIsolated { self?.player.rate = 1 }
@@ -132,11 +195,10 @@ final class ReplayModel {
             slow = nowSlow
             if player.rate > 0 { player.rate = nowSlow ? Self.slowRate : 1 }
         }
-        if !revealed && seconds >= Self.revealAt { revealed = true }
     }
 }
 
-// The replay video, scaled to fit the screen.
+// The replay video, scaled to fit.
 struct ReplayLayerView: UIViewRepresentable {
     let player: AVPlayer
 

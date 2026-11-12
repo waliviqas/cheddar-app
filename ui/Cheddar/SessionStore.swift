@@ -6,7 +6,7 @@ This class's only job is: keep the list of logged sessions, newest first.
 @MainActor
 @Observable
 final class SessionStore {
-    private(set) var sessions: [Session] = [Demo.oct23]
+    private(set) var sessions: [Session] = [Demo.nov11, Demo.oct23]
     private(set) var justLogged: Session.ID?
 
     func log(_ session: Session) {
@@ -14,9 +14,9 @@ final class SessionStore {
         justLogged = session.id
     }
 
-    // Back to how the demo starts: only the Oct 23 session.
+    // Back to the built-in sessions: Nov 11 and Oct 23.
     func reset() {
-        sessions = [Demo.oct23]
+        sessions = [Demo.nov11, Demo.oct23]
         justLogged = nil
     }
 

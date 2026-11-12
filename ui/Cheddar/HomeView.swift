@@ -44,7 +44,7 @@ struct HomeView: View {
                         switch route {
                         case .session(let id):
                             if let session = store.session(id) {
-                                SessionDetailView(session: session) { sessionsPath = [] }
+                                SessionDetailView(session: session)
                             }
                         case .shotMap:
                             ShotMapView()
