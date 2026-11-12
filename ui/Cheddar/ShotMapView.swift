@@ -2,12 +2,15 @@ import SwiftUI
 
 /*
 This screen's only job is: where the pucks went. The big net shows every session together, or the one session
-picked in the row below it, and the numbers follow the pick. Tap a dot to watch that shot.
+picked in the row below it, and the numbers follow the pick. Tap a dot to watch that shot, hold it to see
+which shot it was, and tap or hold a square to lift its dots out when they crowd each other.
 */
 struct ShotMapView: View {
     @Environment(SessionStore.self) private var store
     @State private var picked: Session.ID?
     @State private var replay: Shot?
+    @State private var popped: Int?  // the square whose dots are lifted out
+    @State private var pops = 0      // counts pop-outs, so a closing one can't shut a newer one
 
     private var pickedSession: Session? { picked.flatMap { store.session($0) } }
     private var allShots: [Shot] { store.sessions.flatMap(\.shots) }
@@ -27,7 +30,7 @@ struct ShotMapView: View {
                         Spacer()
                     }
                     MapCard(title: pickedSession.map { dayTitle($0.date) } ?? "ALL SESSIONS", hint: "Tap a dot") {
-                        NetMapView(shots: shots) { shot in letScreenTurn(); replay = shot }
+                        NetMapView(shots: shots, callout: callout, popped: popped, onSquare: pop) { shot in watch(shot) }
                     }
                     Text("SESSIONS")
                         .font(.caption.weight(.bold))
@@ -51,12 +54,41 @@ struct ShotMapView: View {
                 .padding(.vertical, 12)
             }
         }
+        .overlayPreferenceValue(NetBounds.self) { anchor in
+            if let popped, let anchor {
+                let mine = pops
+                GeometryReader { proxy in
+                    ShotPopOut(net: proxy[anchor], shots: NetMapView.spots(of: shots, inCell: popped), cell: popped,
+                               title: callout, onTap: watch) { if pops == mine { self.popped = nil } }
+                }
+                .id(mine)
+            }
+        }
+        .onChange(of: picked) { popped = nil }
         .navigationTitle("Shot Map")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .environment(\.colorScheme, .dark)
         .animation(.easeInOut(duration: 0.3), value: picked)
-        .fullScreenCover(item: $replay, onDismiss: keepUpright) { ShotReplayView(shot: $0) }
+        .fullScreenCover(item: $replay, onDismiss: keepUpright) {
+            ShotReplayView(shot: $0, session: pickedSession ?? store.session(of: $0))
+        }
+    }
+
+    // The held shot's tag title: "SHOT 3 · NOV 11" on All; the day is left out once one session is picked.
+    private func callout(_ shot: Shot) -> String {
+        guard pickedSession == nil, let date = store.session(of: shot)?.date else { return "SHOT \(shot.id)" }
+        return "SHOT \(shot.id) · \(date.formatted(.dateTime.month(.abbreviated).day()).uppercased())"
+    }
+
+    private func pop(_ square: Int) {
+        pops += 1
+        popped = square
+    }
+
+    private func watch(_ shot: Shot) {
+        letScreenTurn()
+        replay = shot
     }
 
     private func dayTitle(_ date: Date) -> String {

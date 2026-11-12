@@ -4,20 +4,27 @@ import SwiftUI
 
 /*
 This screen's only job is: replay one shot, slowing down as the stick hits the puck, with the shot's speed
-and net square shown the whole time. Upright, the numbers sit under the video; sideways, beside it.
+and net square shown the whole time, and a way to open the session's full video at this shot.
+Upright, the numbers sit under the video; sideways, beside it.
 */
 struct ShotReplayView: View {
     let shot: Shot
+    let session: Session?   // the session the shot is from, so its full video can open at this shot
     @State private var model: ReplayModel
+    @State private var watchingFull = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.verticalSizeClass) private var verticalSize
 
-    init(shot: Shot) {
+    init(shot: Shot, session: Session?) {
         self.shot = shot
+        self.session = session
         _model = State(initialValue: ReplayModel(clip: shot.clip.flatMap(Demo.video)))
     }
 
     private var sideways: Bool { verticalSize == .compact }
+
+    // The session's whole video, when there is one and we know when this shot happens in it.
+    private var fullVideo: URL? { shot.clack > 0 ? session?.video.flatMap(Demo.video) : nil }
 
     var body: some View {
         ZStack {
@@ -47,6 +54,13 @@ struct ShotReplayView: View {
         .onAppear { model.play() }
         .onDisappear { model.stop() }
         .persistentSystemOverlays(.hidden)
+        // Kept here rather than on the button: turning the phone rebuilds the button, which would close the video.
+        .fullScreenCover(isPresented: $watchingFull) {
+            if let session, let fullVideo {
+                // Starts where the shot starts: the same moment this replay begins, before the stick hits the puck.
+                SessionVideoView(session: session, url: fullVideo, startAt: max(0, shot.clack - Demo.replayShotAt))
+            }
+        }
     }
 
     // The clip with its labels on top: "SHOT N · REPLAY", plus SLOW-MO while it's slowed down.
@@ -86,7 +100,7 @@ struct ShotReplayView: View {
             .background(.ultraThinMaterial, in: Capsule())
     }
 
-    // The shot's numbers, always on screen: speed, where it went in the net, and a way to watch it again.
+    // The shot's numbers, always on screen: speed, where it went in the net, and ways to watch it again.
     private var info: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("SHOT \(shot.id)")
@@ -110,6 +124,16 @@ struct ShotReplayView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
                     .background(Theme.cheddar, in: Capsule())
+            }
+            if fullVideo != nil {
+                Button { watchingFull = true } label: {
+                    Label("Watch in full session", systemImage: "play.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(.ultraThinMaterial, in: Capsule())
+                }
             }
         }
         .padding(20)

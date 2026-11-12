@@ -1,7 +1,7 @@
 import SwiftUI
 
 /*
-This file's only job is: show the main page first, then the home page once the player taps Get Started.
+This file's only job is: show the main page first, then the home page once the player taps Let It Rip.
 */
 struct AppFlow: View {
     @State private var atHome = false

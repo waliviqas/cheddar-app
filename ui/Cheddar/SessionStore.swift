@@ -23,4 +23,10 @@ final class SessionStore {
     func session(_ id: Session.ID) -> Session? {
         sessions.first { $0.id == id }
     }
+
+    // The session a shot came from. Shot numbers repeat from session to session; replay clip names don't.
+    func session(of shot: Shot) -> Session? {
+        guard let clip = shot.clip else { return nil }
+        return sessions.first { $0.shots.contains { $0.clip == clip } }
+    }
 }

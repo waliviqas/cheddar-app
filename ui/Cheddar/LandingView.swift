@@ -1,7 +1,7 @@
 import SwiftUI
 
 /*
-This screen's only job is: welcome the player and send them on with Get Started.
+This screen's only job is: welcome the player and send them on with Let It Rip.
 */
 struct LandingView: View {
     let onGetStarted: () -> Void
@@ -22,7 +22,7 @@ struct LandingView: View {
                     .padding(.top, 18)
                 Spacer()
                 Button(action: onGetStarted) {
-                    Text("Get Started")
+                    Text("Let It Rip")
                         .font(.headline)
                         .foregroundStyle(Theme.navy)
                         .frame(maxWidth: .infinity)

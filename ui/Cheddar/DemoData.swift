@@ -21,6 +21,7 @@ struct Session: Identifiable {
     let cover: String        // image in the asset catalog
     let shots: [Shot]
     let duration: TimeInterval
+    var video: String? = nil  // the whole session's video in DemoClips, without .mp4
 
     var speeds: [Double] { shots.compactMap(\.mph) }
     var topSpeed: Double? { speeds.max() }
@@ -62,7 +63,7 @@ enum Demo {
     // The session logged live in the Nov 11 demo: the 5 shots above, over the 29 s session video.
     static let nov11: Session = {
         let date = Calendar.current.date(from: DateComponents(year: 2026, month: 11, day: 11, hour: 14, minute: 0)) ?? .now
-        return Session(date: date, cover: "SessionLive", shots: liveShots, duration: 29)
+        return Session(date: date, cover: "SessionLive", shots: liveShots, duration: 29, video: "session")
     }()
 
     // The 1x clips from Oct 23 in the order they were filmed: 58-54, 41-49, 49-49 (third shot), 49-49, 45-40.
@@ -70,11 +71,14 @@ enum Demo {
         let speeds: [Double] = [58, 54, 41, 49, 49, 49, 49, 49, 45, 40]
         let squares: [NetSquare] = [.bottomLeft, .middle, .bottomMiddle, .topRight, .middleRight,
                                     .middleRight, .bottomMiddle, .middleLeft, .topLeft, .bottomRight]
+        // When each stick hits the puck in session-oct23.mp4: the shot's time in its own clip plus where that clip starts.
+        let clacks: [Double] = [9.168, 19.976, 41.323, 58.103, 80.002, 93.642, 124.864, 136.804, 156.757, 169.261]
         let shots = speeds.indices.map { i in
-            Shot(id: i + 1, mph: speeds[i], square: squares[i], clip: "shot-oct23-\(i + 1)")
+            Shot(id: i + 1, mph: speeds[i], square: squares[i], clip: "shot-oct23-\(i + 1)", clack: clacks[i])
         }
         let date = Calendar.current.date(from: DateComponents(year: 2026, month: 10, day: 23, hour: 15, minute: 0)) ?? .now
-        return Session(date: date, cover: "SessionOct23", shots: shots, duration: 13 * 60)
+        // Its whole video: the five clips back to back, silent, 720p (session-oct23.mp4, 3 min).
+        return Session(date: date, cover: "SessionOct23", shots: shots, duration: 13 * 60, video: "session-oct23")
     }()
 }
 

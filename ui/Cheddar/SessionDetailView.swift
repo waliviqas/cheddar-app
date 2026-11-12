@@ -1,13 +1,14 @@
 import SwiftUI
 
 /*
-This screen's only job is: one logged session — its numbers, where the pucks went (tap a dot to watch it), and every shot.
+This screen's only job is: one logged session — its numbers, its full video, and where each shot went (numbered; tap one to watch it).
 Stacked top to bottom so it fits a phone held upright.
 */
 struct SessionDetailView: View {
     let session: Session
     @Environment(SessionStore.self) private var store
     @State private var replay: Shot?
+    @State private var watching = false
 
     var body: some View {
         ZStack {
@@ -20,6 +21,19 @@ struct SessionDetailView: View {
                         Stat(title: "AVERAGE", value: session.average.mphText)
                         Stat(title: "LENGTH", value: session.duration.length)
                     }
+                    if let video = session.video.flatMap(Demo.video) {
+                        Button { letScreenTurn(); watching = true } label: {
+                            Label("Watch full session", systemImage: "play.fill")
+                                .font(.headline)
+                                .foregroundStyle(Theme.navy)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(Theme.cheddar, in: Capsule())
+                        }
+                        .fullScreenCover(isPresented: $watching, onDismiss: keepUpright) {
+                            SessionVideoView(session: session, url: video)
+                        }
+                    }
                     if store.justLogged == session.id {
                         Label("Session logged", systemImage: "checkmark.circle.fill")
                             .font(.subheadline.weight(.semibold))
@@ -28,18 +42,8 @@ struct SessionDetailView: View {
                             .padding(.vertical, 8)
                             .background(.green.opacity(0.15), in: Capsule())
                     }
-                    MapCard(title: "WHERE IT WENT", hint: "Tap a dot") {
-                        NetMapView(shots: session.shots) { shot in letScreenTurn(); replay = shot }
-                    }
-                    Text("EVERY SHOT")
-                        .font(.caption.weight(.bold))
-                        .kerning(1.5)
-                        .foregroundStyle(.white.opacity(0.6))
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 8)], alignment: .leading, spacing: 8) {
-                        ForEach(session.shots) { shot in
-                            ShotChip(shot: shot)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
+                    MapCard(title: "WHERE IT WENT", hint: "Tap a shot") {
+                        NetMapView(shots: session.shots, numbered: true) { shot in letScreenTurn(); replay = shot }
                     }
                 }
                 .padding(.horizontal, 20)
@@ -50,6 +54,6 @@ struct SessionDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .environment(\.colorScheme, .dark)
-        .fullScreenCover(item: $replay, onDismiss: keepUpright) { ShotReplayView(shot: $0) }
+        .fullScreenCover(item: $replay, onDismiss: keepUpright) { ShotReplayView(shot: $0, session: session) }
     }
 }

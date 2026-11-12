@@ -5,6 +5,7 @@ This screen's only job is: list every logged session so the user can scroll thro
 */
 struct SessionsView: View {
     @Environment(SessionStore.self) private var store
+    @State private var watching: Session?
 
     var body: some View {
         ZStack {
@@ -13,7 +14,10 @@ struct SessionsView: View {
                 VStack(spacing: 12) {
                     ForEach(store.sessions) { session in
                         NavigationLink(value: Route.session(session.id)) {
-                            SessionRow(session: session)
+                            SessionRow(session: session, onWatch: session.video == nil ? nil : {
+                                letScreenTurn()
+                                watching = session
+                            })
                         }
                         .buttonStyle(.plain)
                     }
@@ -24,6 +28,11 @@ struct SessionsView: View {
         }
         .navigationTitle("Sessions")
         .toolbarBackground(.hidden, for: .navigationBar)
+        .fullScreenCover(item: $watching, onDismiss: keepUpright) { session in
+            if let url = session.video.flatMap(Demo.video) {
+                SessionVideoView(session: session, url: url)
+            }
+        }
         .toolbar {
             NavigationLink(value: Route.shotMap) {
                 Label("Shot Map", systemImage: "scope")
@@ -35,6 +44,7 @@ struct SessionsView: View {
 
 private struct SessionRow: View {
     let session: Session
+    let onWatch: (() -> Void)?   // plays the whole session's video; nil when there isn't one
 
     // Stacked top to bottom so it fits a phone held upright: picture, date, then the numbers and the net.
     var body: some View {
@@ -44,6 +54,19 @@ private struct SessionRow: View {
                 .frame(maxWidth: .infinity)
                 .overlay(Image(session.cover).resizable().scaledToFill())
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(alignment: .bottomLeading) {
+                    if let onWatch {
+                        Button(action: onWatch) {
+                            Label("Watch full session", systemImage: "play.fill")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 8)
+                                .background(.ultraThinMaterial, in: Capsule())
+                        }
+                        .padding(10)
+                    }
+                }
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(session.date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
