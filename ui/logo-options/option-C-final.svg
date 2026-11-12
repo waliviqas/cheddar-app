@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+ <defs>
+  <radialGradient id="bg" cx="50%" cy="40%" r="75%"><stop offset="0" stop-color="#17375C"/><stop offset="1" stop-color="#060F1A"/></radialGradient>
+  <linearGradient id="top" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFDB55"/><stop offset="1" stop-color="#FFAF14"/></linearGradient>
+  <linearGradient id="side" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#C46A00"/><stop offset=".45" stop-color="#F09A12"/><stop offset="1" stop-color="#A35200"/></linearGradient>
+  <pattern id="knurl" width="22" height="22" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+   <rect width="22" height="22" fill="none"/><path d="M0,0 L0,22 M0,0 L22,0" stroke="#6B3300" stroke-opacity=".45" stroke-width="5"/>
+  </pattern>
+  <clipPath id="band"><path d="M262,470 L262,630 A270,100 0 0,0 802,630 L802,470 A270,100 0 0,1 262,470 Z"/></clipPath>
+ </defs>
+ <rect width="1024" height="1024" fill="url(#bg)"/>
+ <g transform="translate(-14,-62) rotate(-10 532 550)">
+  <g stroke="#CFE8FF" stroke-linecap="round">
+   <line x1="40" y1="455" x2="230" y2="455" stroke-width="24" stroke-opacity=".5"/>
+   <line x1="10" y1="550" x2="225" y2="550" stroke-width="36" stroke-opacity=".85"/>
+   <line x1="70" y1="645" x2="235" y2="645" stroke-width="24" stroke-opacity=".5"/>
+  </g>
+  <ellipse cx="532" cy="760" rx="250" ry="40" fill="#000" fill-opacity=".35"/>
+  <path d="M262,470 L262,630 A270,100 0 0,0 802,630 L802,470 A270,100 0 0,1 262,470 Z" fill="url(#side)"/>
+  <rect x="262" y="480" width="540" height="260" fill="url(#knurl)" clip-path="url(#band)"/>
+  <g fill="#7A3C00" clip-path="url(#band)"><ellipse cx="350" cy="600" rx="22" ry="30"/><ellipse cx="560" cy="660" rx="30" ry="38"/><ellipse cx="730" cy="590" rx="18" ry="24"/><ellipse cx="455" cy="690" rx="14" ry="18"/></g>
+  <path d="M262,470 L262,630 A270,100 0 0,0 802,630 L802,470" fill="none" stroke="#07121F" stroke-width="14" stroke-linejoin="round"/>
+  <ellipse cx="532" cy="470" rx="270" ry="100" fill="url(#top)" stroke="#07121F" stroke-width="14"/>
+  <ellipse cx="532" cy="470" rx="226" ry="80" fill="none" stroke="#FFE680" stroke-opacity=".55" stroke-width="6"/>
+  <g fill="#E58A00"><ellipse cx="440" cy="445" rx="42" ry="15"/><ellipse cx="610" cy="495" rx="52" ry="18"/><ellipse cx="655" cy="430" rx="24" ry="8"/><ellipse cx="385" cy="495" rx="20" ry="7"/><ellipse cx="530" cy="410" rx="18" ry="6"/></g>
+ </g>
+</svg>

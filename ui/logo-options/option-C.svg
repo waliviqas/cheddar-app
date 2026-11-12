@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024"><defs>
+ <radialGradient id="bg" cx="50%" cy="40%" r="75%"><stop offset="0" stop-color="#17375C"/><stop offset="1" stop-color="#060F1A"/></radialGradient>
+ <linearGradient id="cheese" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFD84D"/><stop offset="1" stop-color="#FFA90F"/></linearGradient>
+ <g id="stick">
+  <rect x="-21" y="-440" width="42" height="730" rx="14" fill="#EEF4FB" stroke="#07121F" stroke-width="7"/>
+  <rect x="-23" y="-440" width="46" height="80" rx="14" fill="#14181F" stroke="#07121F" stroke-width="7"/>
+  <path d="M-21,262 L-21,300 Q-19,342 26,344 L200,344 Q238,342 240,308 L240,298 Q234,276 204,276 L21,276 L21,262 Z" fill="#EEF4FB" stroke="#07121F" stroke-width="7"/>
+  <rect x="48" y="281" width="150" height="58" fill="#FFC22E"/>
+  <g stroke="#B85F00" stroke-width="5"><line x1="70" y1="281" x2="56" y2="339"/><line x1="100" y1="281" x2="86" y2="339"/><line x1="130" y1="281" x2="116" y2="339"/><line x1="160" y1="281" x2="146" y2="339"/><line x1="190" y1="281" x2="176" y2="339"/></g>
+ </g>
+</defs>
+ <linearGradient id="side" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E08A00"/><stop offset="1" stop-color="#A65200"/></linearGradient>
+ <rect width="1024" height="1024" fill="url(#bg)"/>
+ <line x1="0" y1="760" x2="1024" y2="760" stroke="#E0303F" stroke-opacity=".35" stroke-width="14"/>
+ <line x1="0" y1="250" x2="1024" y2="250" stroke="#3B7BD9" stroke-opacity=".3" stroke-width="22"/>
+ <g transform="rotate(-12 512 512)">
+  <g stroke="#CFE8FF" stroke-linecap="round"><line x1="40" y1="440" x2="230" y2="440" stroke-width="24" stroke-opacity=".5"/><line x1="10" y1="520" x2="215" y2="520" stroke-width="34" stroke-opacity=".85"/><line x1="70" y1="600" x2="240" y2="600" stroke-width="24" stroke-opacity=".5"/></g>
+  <g fill="#CFE8FF" fill-opacity=".7"><circle cx="150" cy="660" r="9"/><circle cx="110" cy="640" r="6"/><circle cx="190" cy="690" r="7"/><circle cx="70" cy="675" r="5"/></g>
+  <path d="M232,500 L232,590 A300,112 0 0,0 832,590 L832,500 A300,112 0 0,1 232,500 Z" fill="url(#side)" stroke="#07121F" stroke-width="12"/>
+  <ellipse cx="532" cy="500" rx="300" ry="112" fill="url(#cheese)" stroke="#07121F" stroke-width="12"/>
+  <g fill="#E58A00"><ellipse cx="430" cy="470" rx="46" ry="16"/><ellipse cx="610" cy="530" rx="58" ry="20"/><ellipse cx="660" cy="455" rx="26" ry="9"/><ellipse cx="370" cy="530" rx="22" ry="8"/><ellipse cx="530" cy="430" rx="20" ry="7"/></g>
+  <g fill="#7A3C00"><path d="M330,600 a22,30 0 0,0 44,0 z"/><path d="M700,612 a26,34 0 0,0 52,0 z"/><path d="M520,628 a16,22 0 0,0 32,0 z"/></g>
+  <text x="532" y="545" text-anchor="middle" font-family="Avenir Next Condensed" font-weight="800" font-style="italic" font-size="120" fill="#07121F" fill-opacity=".0">C</text>
+ </g>
+</svg>

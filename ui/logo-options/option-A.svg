@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1024 1024" width="1024" height="1024"><defs>
+ <radialGradient id="bg" cx="50%" cy="40%" r="75%"><stop offset="0" stop-color="#17375C"/><stop offset="1" stop-color="#060F1A"/></radialGradient>
+ <linearGradient id="cheese" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFD84D"/><stop offset="1" stop-color="#FFA90F"/></linearGradient>
+ <g id="stick">
+  <rect x="-21" y="-440" width="42" height="730" rx="14" fill="#EEF4FB" stroke="#07121F" stroke-width="7"/>
+  <rect x="-23" y="-440" width="46" height="80" rx="14" fill="#14181F" stroke="#07121F" stroke-width="7"/>
+  <path d="M-21,262 L-21,300 Q-19,342 26,344 L200,344 Q238,342 240,308 L240,298 Q234,276 204,276 L21,276 L21,262 Z" fill="#EEF4FB" stroke="#07121F" stroke-width="7"/>
+  <rect x="48" y="281" width="150" height="58" fill="#FFC22E"/>
+  <g stroke="#B85F00" stroke-width="5"><line x1="70" y1="281" x2="56" y2="339"/><line x1="100" y1="281" x2="86" y2="339"/><line x1="130" y1="281" x2="116" y2="339"/><line x1="160" y1="281" x2="146" y2="339"/><line x1="190" y1="281" x2="176" y2="339"/></g>
+ </g>
+</defs>
+ <clipPath id="cclip"><text x="520" y="745" text-anchor="middle" font-family="Avenir Next Condensed" font-weight="800" font-style="italic" font-size="600">C</text></clipPath>
+ <rect width="1024" height="1024" fill="url(#bg)"/>
+ <use href="#stick" transform="translate(512,560) rotate(32) scale(-1,1)"/>
+ <use href="#stick" transform="translate(512,560) rotate(-32)"/>
+ <path d="M222,180 Q512,128 802,180 L802,520 Q802,770 512,900 Q222,770 222,520 Z" fill="#0B1E33" stroke="#FFC22E" stroke-width="30"/>
+ <path d="M222,180 Q512,128 802,180 L802,520 Q802,770 512,900 Q222,770 222,520 Z" fill="none" stroke="#EEF4FB" stroke-width="8" transform="translate(512 520) scale(0.88) translate(-512 -520)"/>
+ <g fill="#FFC22E"><path d="M512,205 l11,23 25,3 -18,17 5,25 -23,-12 -23,12 5,-25 -18,-17 25,-3z" transform="translate(-80,20) scale(0.8) translate(128,51)"/><path d="M512,205 l11,23 25,3 -18,17 5,25 -23,-12 -23,12 5,-25 -18,-17 25,-3z"/><path d="M512,205 l11,23 25,3 -18,17 5,25 -23,-12 -23,12 5,-25 -18,-17 25,-3z" transform="translate(80,20) scale(0.8) translate(128,51)"/></g>
+ <text x="520" y="745" text-anchor="middle" font-family="Avenir Next Condensed" font-weight="800" font-style="italic" font-size="600" fill="#B85F00" transform="translate(10,14)">C</text>
+ <text x="520" y="745" text-anchor="middle" font-family="Avenir Next Condensed" font-weight="800" font-style="italic" font-size="600" fill="url(#cheese)" stroke="#07121F" stroke-width="10" paint-order="stroke">C</text>
+ <g clip-path="url(#cclip)" fill="#E58A00"><circle cx="420" cy="380" r="30"/><circle cx="380" cy="560" r="22"/><circle cx="470" cy="660" r="34"/><circle cx="590" cy="300" r="18"/><circle cx="640" cy="690" r="20"/></g>
+</svg>

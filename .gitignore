@@ -68,3 +68,6 @@ cool-pictures/
 backend/Models/SAM2.1-Large/
 
 ui/Cheddar/DemoClips/
+
+# Frozen copy of the Kyle Okposo demo app (2026-11-11), kept locally only
+demo/

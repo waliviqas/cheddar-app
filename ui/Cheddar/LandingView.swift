@@ -1,49 +1,41 @@
 import SwiftUI
 
 /*
-This screen's only job is: welcome the user and hand them to their clips.
+This screen's only job is: welcome the player and send them on with Get Started.
 */
 struct LandingView: View {
+    let onGetStarted: () -> Void
+
     var body: some View {
-        NavigationStack {
-            ZStack {
-                Theme.background.ignoresSafeArea()
-                VStack(spacing: 0) {
-                    Spacer()
-                    Image("Logo")
-                        .resizable()
-                        .frame(width: 180, height: 180)
-                        .clipShape(RoundedRectangle(cornerRadius: 40, style: .continuous))
-                        .shadow(color: Theme.cheddar.opacity(0.25), radius: 30)
-                    Text("CHEDDAR")
-                        .font(Theme.display(64))
-                        .foregroundStyle(.white)
-                        .padding(.top, 28)
-                    Text("PORTABLE RADAR GUN")
-                        .font(.footnote.weight(.semibold))
-                        .kerning(4)
-                        .foregroundStyle(Theme.cheddar)
-                        .padding(.top, 4)
-                    Spacer()
-                    NavigationLink {
-                        ClipLibraryView()
-                    } label: {
-                        Text("Get Started")
-                            .font(.headline)
-                            .foregroundStyle(Theme.navy)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 18)
-                            .background(Theme.cheddar, in: Capsule())
-                    }
-                    .padding(.horizontal, 32)
-                    .padding(.bottom, 24)
+        ZStack {
+            Theme.background.ignoresSafeArea()
+            VStack(spacing: 0) {
+                Spacer()
+                Image("Logo")
+                    .resizable()
+                    .frame(width: 150, height: 150)
+                    .clipShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
+                    .shadow(color: Theme.cheddar.opacity(0.25), radius: 30)
+                Text("CHEDDAR")
+                    .font(Theme.display(56))
+                    .foregroundStyle(.white)
+                    .padding(.top, 18)
+                Spacer()
+                Button(action: onGetStarted) {
+                    Text("Get Started")
+                        .font(.headline)
+                        .foregroundStyle(Theme.navy)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(Theme.cheddar, in: Capsule())
                 }
             }
+            .padding(.horizontal, 28)
+            .padding(.vertical, 12)
         }
-        .tint(Theme.cheddar)
     }
 }
 
 #Preview {
-    LandingView()
+    LandingView {}
 }

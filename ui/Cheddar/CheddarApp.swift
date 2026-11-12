@@ -7,7 +7,7 @@ This file's only job is: boot the app and show the first screen.
 struct CheddarApp: App {
     var body: some Scene {
         WindowGroup {
-            LandingView()
+            AppFlow()
                 .preferredColorScheme(.dark)
         }
     }
