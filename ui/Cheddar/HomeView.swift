@@ -54,6 +54,7 @@ struct HomeView: View {
             .tabItem { Label("Sessions", systemImage: "list.bullet") }
         }
         .environment(store)
+        .environment(\.speedRange, store.speedRange)
         .tint(Theme.cheddar)
         .fullScreenCover(isPresented: $turning) {
             // The screen after this one isn't built yet, so the check has nowhere to go.

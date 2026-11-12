@@ -16,6 +16,7 @@ struct ShotPopOut: View {
 
     @State private var out = false
     @State private var holding: Int?
+    @Environment(\.speedRange) private var range
 
     private static let scale: CGFloat = 2
     private static let target: CGFloat = 44
@@ -54,7 +55,7 @@ struct ShotPopOut: View {
             }
             if let holding {
                 ShotTag(shot: shots[holding].shot, title: title(shots[holding].shot))
-                    .position(tagPoint(above: spots[holding], size: SpeedDot.size(for: shots[holding].shot.mph, scale: Self.scale),
+                    .position(tagPoint(above: spots[holding], size: SpeedDot.size(for: shots[holding].shot.mph, scale: Self.scale, range: range),
                                        minX: net.minX + 40, maxX: net.maxX - 40))
                     .allowsHitTesting(false)
             }

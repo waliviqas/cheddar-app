@@ -17,6 +17,7 @@ struct NetMapView: View {
     var onTap: ((Shot) -> Void)? = nil
 
     @State private var holding: Int?
+    @Environment(\.speedRange) private var range
 
     // Space between numbered dots in a square; also keeps their tap areas from overlapping.
     private static let gap: CGFloat = 10
@@ -40,7 +41,7 @@ struct NetMapView: View {
                 }
                 if let holding, let callout, let point = points[holding] {
                     ShotTag(shot: shots[holding], title: callout(shots[holding]))
-                        .position(tagPoint(above: point, size: SpeedDot.size(for: shots[holding].mph, scale: scale), minX: 40, maxX: w - 40))
+                        .position(tagPoint(above: point, size: SpeedDot.size(for: shots[holding].mph, scale: scale, range: range), minX: 40, maxX: w - 40))
                         .allowsHitTesting(false)
                 }
             }
@@ -57,14 +58,14 @@ struct NetMapView: View {
         let face = SpeedDot(mph: shot.mph, scale: scale, number: numbered ? shot.id : nil)
         if callout != nil {
             // Just the dot itself is a target, so the rest of the square is left for popping it out.
-            let size = SpeedDot.size(for: shot.mph, scale: scale) + 8
+            let size = SpeedDot.size(for: shot.mph, scale: scale, range: range) + 8
             face
                 .frame(width: size, height: size)
                 .contentShape(Circle())
                 .modifier(HoldOrTap(holding: $holding, index: index) { onTap?(shot) })
         } else if let onTap {
             face
-                .frame(width: numbered ? SpeedDot.size(for: shot.mph, scale: scale) + Self.gap : 34, height: 34)
+                .frame(width: numbered ? SpeedDot.size(for: shot.mph, scale: scale, range: range) + Self.gap : 34, height: 34)
                 .contentShape(Rectangle())
                 .onTapGesture { onTap(shot) }
         } else {
@@ -83,7 +84,7 @@ struct NetMapView: View {
         }
         var out: [Int: (point: CGPoint, fit: CGFloat)] = [:]
         for (key, indices) in byCell {
-            let sizes = indices.map { SpeedDot.size(for: shots[$0].mph, scale: scale) }
+            let sizes = indices.map { SpeedDot.size(for: shots[$0].mph, scale: scale, range: range) }
             let rows = stride(from: 0, to: indices.count, by: 3).map { Array($0..<min($0 + 3, indices.count)) }
             let rowWidths = rows.map { row in row.map { sizes[$0] }.reduce(0, +) + gap * CGFloat(row.count - 1) }
             let rowHeights = rows.map { row in row.map { sizes[$0] }.max() ?? 0 }
@@ -155,24 +156,32 @@ struct NetMapView: View {
     }
 }
 
-// One shot as a dot: faster shots are bigger and brighter cheddar. With a number, it's written inside, small.
+// One shot as a dot: the faster it was next to the player's own slowest and fastest, the bigger and brighter
+// the cheddar, so a new record makes the old ones fade. With a number, it's written inside, small.
 struct SpeedDot: View {
     let mph: Double?
     var scale: CGFloat = 1
     var number: Int? = nil
     var lifted = false  // popped out of its square: near full color, so slow shots don't fade into the map
 
-    static func size(for mph: Double?, scale: CGFloat) -> CGFloat {
-        max(5, (9 + 7 * strength(of: mph)) * scale)
+    @Environment(\.speedRange) private var range
+
+    static func size(for mph: Double?, scale: CGFloat, range: ClosedRange<Double>?) -> CGFloat {
+        max(5, (9 + 7 * strength(of: mph, in: range)) * scale)
     }
 
-    private static func strength(of mph: Double?) -> CGFloat {
-        CGFloat(mph.map { min(max(($0 - 40) / 25, 0), 1) } ?? 0)
+    // 0 for the player's slowest shot, 1 for their fastest. Before there's any history, 40–65 mph.
+    private static func strength(of mph: Double?, in range: ClosedRange<Double>?) -> CGFloat {
+        guard let mph else { return 0 }
+        let range = range ?? 40...65
+        let span = range.upperBound - range.lowerBound
+        guard span > 0 else { return 1 }
+        return CGFloat(min(max((mph - range.lowerBound) / span, 0), 1))
     }
 
     var body: some View {
-        let strength = Self.strength(of: mph)
-        let size = Self.size(for: mph, scale: scale)
+        let strength = Self.strength(of: mph, in: range)
+        let size = Self.size(for: mph, scale: scale, range: range)
         Circle()
             .fill(mph == nil ? Color.white.opacity(lifted ? 0.8 : 0.4)
                              : Theme.cheddar.opacity(lifted ? 0.85 + 0.15 * strength : 0.45 + 0.55 * strength))
@@ -190,6 +199,11 @@ struct SpeedDot: View {
             }
             .shadow(color: Theme.cheddar.opacity(0.6 * strength), radius: 6)
     }
+}
+
+// The player's slowest to fastest readable shot so far; set once from the store at the top of the app.
+extension EnvironmentValues {
+    @Entry var speedRange: ClosedRange<Double>? = nil
 }
 
 // A repeatable 0–1 number per index, so the scatter is the same every time.

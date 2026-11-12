@@ -20,6 +20,14 @@ final class SessionStore {
         justLogged = nil
     }
 
+    // Slowest to fastest readable shot across every session. The shot maps size and color dots against it,
+    // so a new record makes older shots look slower. nil until there's a shot with a speed.
+    var speedRange: ClosedRange<Double>? {
+        let speeds = sessions.flatMap(\.speeds)
+        guard let slowest = speeds.min(), let fastest = speeds.max() else { return nil }
+        return slowest...fastest
+    }
+
     func session(_ id: Session.ID) -> Session? {
         sessions.first { $0.id == id }
     }
