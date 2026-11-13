@@ -5,12 +5,17 @@ This screen's only job is: show the camera, let the user film a shot, and reveal
 */
 struct RecordView: View {
     @State private var model = RecordViewModel()
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         ZStack {
             CameraPreview(session: model.recorder.session)
                 .ignoresSafeArea()
             controls
+        }
+        .overlay(alignment: .topLeading) {
+            closeButton
+                .padding(16)
         }
         .task { await model.start() }
         .onDisappear { model.stop() }
@@ -53,6 +58,17 @@ struct RecordView: View {
             }
             .disabled(!model.cameraReady)
             .padding(.bottom, 32)
+        }
+    }
+
+    // Same close button as the shot replay.
+    private var closeButton: some View {
+        Button { dismiss() } label: {
+            Image(systemName: "xmark")
+                .font(.headline)
+                .foregroundStyle(.white)
+                .frame(width: 40, height: 40)
+                .background(.ultraThinMaterial, in: Circle())
         }
     }
 

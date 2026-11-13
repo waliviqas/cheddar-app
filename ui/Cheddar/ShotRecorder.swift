@@ -62,6 +62,9 @@ final class ShotRecorder: NSObject, AVCaptureFileOutputRecordingDelegate {
         }
         session.addInput(input)
         session.addOutput(output)
+        if let connection = output.connection(with: .video), connection.isVideoRotationAngleSupported(0) {
+            connection.videoRotationAngle = 0  // sideways, top of the phone to the left, like the rink clips
+        }
         applyFastestFrameRate(to: camera)
         session.commitConfiguration()
         return true

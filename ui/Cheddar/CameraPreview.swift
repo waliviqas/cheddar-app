@@ -10,6 +10,19 @@ struct CameraPreview: UIViewRepresentable {
     // A plain UIKit view whose backing layer is the camera feed.
     final class PreviewView: UIView {
         override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            faceSideways()
+        }
+
+        // The camera screen is always sideways (top of the phone to the left), which is the camera's own
+        // natural way round, so the picture needs no turn. The feed only exists once the camera is wired.
+        func faceSideways() {
+            guard let connection = (layer as! AVCaptureVideoPreviewLayer).connection,
+                  connection.isVideoRotationAngleSupported(0) else { return }
+            connection.videoRotationAngle = 0
+        }
     }
 
     // Builds the view and points its layer at our camera session.
@@ -21,6 +34,8 @@ struct CameraPreview: UIViewRepresentable {
         return view
     }
 
-    // Nothing changes after setup, so there is nothing to update.
-    func updateUIView(_ uiView: PreviewView, context: Context) {}
+    // Runs again once the camera is ready, so the picture gets turned as soon as there is one.
+    func updateUIView(_ uiView: PreviewView, context: Context) {
+        uiView.faceSideways()
+    }
 }

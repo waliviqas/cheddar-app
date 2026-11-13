@@ -2,8 +2,9 @@ import SwiftUI
 import UIKit
 
 /*
-This file's only job is: keep the app upright, except while a shot replay is open (it turns with the phone).
-The switch has to happen before the replay opens: a screen that's already up won't pick up the change.
+This file's only job is: keep the app upright, except while a shot replay is open (it turns with the phone)
+or the camera is up (sideways). The switch has to happen before that screen opens: a screen that's already up
+won't pick up the change.
 */
 @MainActor
 final class AppDelegate: NSObject, UIApplicationDelegate {
@@ -20,7 +21,14 @@ func letScreenTurn() {
     allowOrientations(.allButUpsideDown)
 }
 
-// Called when the replay closes, so the app stands back up.
+// Called right before the camera opens: sideways the way the turn screen shows it, top of the phone to the left,
+// so every recording comes out the same way round.
+@MainActor
+func turnSideways() {
+    allowOrientations(.landscapeRight)
+}
+
+// Called when the replay or the camera closes, so the app stands back up.
 @MainActor
 func keepUpright() {
     allowOrientations(.portrait)

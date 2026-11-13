@@ -2,7 +2,8 @@ import SwiftUI
 
 /*
 This screen's only job is: the home page and its tab bar, so the player can switch between Home, Shot Map
-and Sessions. Start Session on the Home tab opens the turn-your-phone screen.
+and Sessions. Start Session on the Home tab opens the turn-your-phone screen, and its check opens the camera,
+sideways. Closing the camera comes back here.
 */
 enum Route: Hashable {
     case session(Session.ID)
@@ -12,11 +13,12 @@ struct HomeView: View {
     @State private var store = SessionStore()
     @State private var sessionsPath: [Route] = []
     @State private var turning = false
+    @State private var filming = false
 
     var body: some View {
         TabView {
             NavigationStack {
-                ZStack {
+                ZStack(alignment: .top) {
                     Theme.background.ignoresSafeArea()
                     Button { turning = true } label: {
                         Label("Start Session", systemImage: "record.circle")
@@ -27,6 +29,7 @@ struct HomeView: View {
                             .background(Theme.cheddar, in: Capsule())
                     }
                     .padding(.horizontal, 28)
+                    .padding(.top, 12)  // just under the Home title; the rest of the page is for stats later
                 }
                 .navigationTitle("Home")
             }
@@ -54,8 +57,16 @@ struct HomeView: View {
         .environment(\.speedRange, store.speedRange)
         .tint(Theme.cheddar)
         .fullScreenCover(isPresented: $turning) {
-            // The screen after this one isn't built yet, so the check has nowhere to go.
-            TurnPhoneView {}
+            TurnPhoneView {
+                turnSideways()
+                filming = true
+            }
+            .fullScreenCover(isPresented: $filming, onDismiss: {
+                keepUpright()
+                turning = false
+            }) {
+                RecordView()
+            }
         }
     }
 }
