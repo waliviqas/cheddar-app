@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		DEC0DE000000000000000001 /* CVPipeline in Frameworks */ = {isa = PBXBuildFile; productRef = DEC0DE000000000000000002 /* CVPipeline */; };
+		DEC0DE000000000000000020 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = DEC0DE000000000000000021 /* Supabase */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -24,6 +25,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				DEC0DE000000000000000001 /* CVPipeline in Frameworks */,
+				DEC0DE000000000000000020 /* Supabase in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -67,6 +69,7 @@
 			name = Cheddar;
 			packageProductDependencies = (
 				DEC0DE000000000000000002 /* CVPipeline */,
+				DEC0DE000000000000000021 /* Supabase */,
 			);
 			productName = Cheddar;
 			productReference = DEC0DE000000000000000003 /* Cheddar.app */;
@@ -99,6 +102,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				DEC0DE00000000000000000E /* XCLocalSwiftPackageReference "../backend" */,
+				DEC0DE000000000000000022 /* XCRemoteSwiftPackageReference "supabase-swift" */,
 			);
 			productRefGroup = DEC0DE000000000000000007 /* Products */;
 			projectDirPath = "";
@@ -331,10 +335,26 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		DEC0DE000000000000000022 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase/supabase-swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.55.6;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		DEC0DE000000000000000002 /* CVPipeline */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = CVPipeline;
+		};
+		DEC0DE000000000000000021 /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DEC0DE000000000000000022 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
