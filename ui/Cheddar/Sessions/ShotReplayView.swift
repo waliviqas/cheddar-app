@@ -18,13 +18,13 @@ struct ShotReplayView: View {
     init(shot: Shot, session: Session?) {
         self.shot = shot
         self.session = session
-        _model = State(initialValue: ReplayModel(clip: shot.clip.flatMap(Demo.video)))
+        _model = State(initialValue: ReplayModel(clip: shot.clip.flatMap(SavedVideos.url)))
     }
 
     private var sideways: Bool { verticalSize == .compact }
 
     // The session's whole video, when there is one and we know when this shot happens in it.
-    private var fullVideo: URL? { shot.clack > 0 ? session?.video.flatMap(Demo.video) : nil }
+    private var fullVideo: URL? { shot.clack > 0 ? session?.video.flatMap(SavedVideos.url) : nil }
 
     var body: some View {
         ZStack {
@@ -58,7 +58,7 @@ struct ShotReplayView: View {
         .fullScreenCover(isPresented: $watchingFull) {
             if let session, let fullVideo {
                 // Starts where the shot starts: the same moment this replay begins, before the stick hits the puck.
-                SessionVideoView(session: session, url: fullVideo, startAt: max(0, shot.clack - Demo.replayShotAt))
+                SessionVideoView(session: session, url: fullVideo, startAt: max(0, shot.clack - ReplayModel.shotAt))
             }
         }
     }
@@ -174,8 +174,9 @@ struct ShotReplayView: View {
 @MainActor
 @Observable
 final class ReplayModel {
-    static let slowFrom = Demo.replayShotAt - 0.5
-    static let slowUntil = Demo.replayShotAt + 0.6
+    static let shotAt = 2.2  // in every replay clip the stick hits the puck about this far in
+    static let slowFrom = shotAt - 0.5
+    static let slowUntil = shotAt + 0.6
     static let slowRate: Float = 0.25
 
     let player = AVPlayer()

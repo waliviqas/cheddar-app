@@ -1,15 +1,19 @@
 import SwiftUI
 
 /*
-This screen's only job is: the home page and its tab bar, so the player can switch between Home, Shot Map
-and Sessions. Start Session on the Home tab opens the turn-your-phone screen, and its check opens the camera,
-sideways. Closing the camera comes back here.
+This screen's only job is: the home page and its tab bar, so the player can switch between Home, Shot Map,
+Sessions and Account. Start Session on the Home tab opens the turn-your-phone screen, and its check opens the
+camera, sideways. Closing the camera comes back here. The top of Home greets the player by name.
 */
 enum Route: Hashable {
     case session(Session.ID)
 }
 
 struct HomeView: View {
+    var onSignedIn: () -> Void = {}   // a guest signed in from the Account tab
+    var onSignedOut: () -> Void = {}
+
+    @Environment(PlayerName.self) private var player
     @State private var store = SessionStore()
     @State private var sessionsPath: [Route] = []
     @State private var turning = false
@@ -31,7 +35,7 @@ struct HomeView: View {
                     .padding(.horizontal, 28)
                     .padding(.top, 12)  // just under the Home title; the rest of the page is for stats later
                 }
-                .navigationTitle("Home")
+                .navigationTitle(player.name.map { "Welcome, \($0)" } ?? "Home")
             }
             .tabItem { Label("Home", systemImage: "house.fill") }
 
@@ -52,6 +56,11 @@ struct HomeView: View {
                     }
             }
             .tabItem { Label("Sessions", systemImage: "list.bullet") }
+
+            NavigationStack {
+                SettingsView(onSignedIn: onSignedIn, onAccountDeleted: onSignedOut)
+            }
+            .tabItem { Label("Account", systemImage: "person.crop.circle") }
         }
         .environment(store)
         .environment(\.speedRange, store.speedRange)
@@ -73,4 +82,5 @@ struct HomeView: View {
 
 #Preview {
     HomeView()
+        .environment(PlayerName())
 }

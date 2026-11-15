@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		DEC0DE000000000000000001 /* CVPipeline in Frameworks */ = {isa = PBXBuildFile; productRef = DEC0DE000000000000000002 /* CVPipeline */; };
 		DEC0DE000000000000000020 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = DEC0DE000000000000000021 /* Supabase */; };
+		DEC0DE000000000000000023 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = DEC0DE000000000000000024 /* GoogleSignIn */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -26,6 +27,7 @@
 			files = (
 				DEC0DE000000000000000001 /* CVPipeline in Frameworks */,
 				DEC0DE000000000000000020 /* Supabase in Frameworks */,
+				DEC0DE000000000000000023 /* GoogleSignIn in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -70,6 +72,7 @@
 			packageProductDependencies = (
 				DEC0DE000000000000000002 /* CVPipeline */,
 				DEC0DE000000000000000021 /* Supabase */,
+				DEC0DE000000000000000024 /* GoogleSignIn */,
 			);
 			productName = Cheddar;
 			productReference = DEC0DE000000000000000003 /* Cheddar.app */;
@@ -103,6 +106,7 @@
 			packageReferences = (
 				DEC0DE00000000000000000E /* XCLocalSwiftPackageReference "../backend" */,
 				DEC0DE000000000000000022 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+				DEC0DE000000000000000025 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 			);
 			productRefGroup = DEC0DE000000000000000007 /* Products */;
 			projectDirPath = "";
@@ -257,8 +261,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Cheddar.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = XXRAKQ74YY;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Cheddar-Info.plist";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Cheddar films your shot to measure its speed. Video never leaves your phone.";
@@ -283,8 +289,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Cheddar.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = XXRAKQ74YY;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Cheddar-Info.plist";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Cheddar films your shot to measure its speed. Video never leaves your phone.";
@@ -344,6 +352,14 @@
 				minimumVersion = 2.55.6;
 			};
 		};
+		DEC0DE000000000000000025 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 10.1.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -355,6 +371,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = DEC0DE000000000000000022 /* XCRemoteSwiftPackageReference "supabase-swift" */;
 			productName = Supabase;
+		};
+		DEC0DE000000000000000024 /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DEC0DE000000000000000025 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

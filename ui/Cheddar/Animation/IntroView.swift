@@ -106,7 +106,7 @@ private struct IntroFrame: View {
                 .font(Theme.display(56))
                 .foregroundStyle(.white)
                 .opacity(shot.nameOpacity)
-                .position(x: shot.logo.x, y: shot.logo.y + 123 + 12 * (1 - shot.nameOpacity))
+                .position(x: shot.logo.x, y: shot.logo.y + BrandSpot.nameBelowLogo + 12 * (1 - shot.nameOpacity))
         }
     }
 }
@@ -131,7 +131,7 @@ private struct IntroShot {
     init(t: Double, size: CGSize) {
         let w = Double(size.width), h = Double(size.height)
         let focal = (h / 2) / tan(World.fieldOfView / 2)
-        logo = CGPoint(x: w / 2, y: h / 2 - 37)
+        logo = BrandSpot.logo(in: size)
         fade = Ease.out(span(t, 0, 0.14))
         let face = CGPoint(x: logo.x - 75 + LogoPuck.logoFaceCenter.x * 150, y: logo.y - 75 + LogoPuck.logoFaceCenter.y * 150)
         let landed = LogoPuck.logoFaceRadius * 150
@@ -314,6 +314,16 @@ private func blend(_ a: CGPoint, _ b: CGPoint, _ x: Double) -> CGPoint {
     CGPoint(x: a.x + (b.x - a.x) * x, y: a.y + (b.y - a.y) * x)
 }
 private func blend(_ a: SIMD3<Double>, _ b: SIMD3<Double>, _ x: Double) -> SIMD3<Double> { a + (b - a) * x }
+
+// Where the logo and CHEDDAR sit at the end of the intro and on the Let It Rip page, so one hands off to the other
+// without a jump. Measured on the whole screen, safe areas included.
+enum BrandSpot {
+    static let nameBelowLogo: CGFloat = 123
+
+    static func logo(in size: CGSize) -> CGPoint {
+        CGPoint(x: size.width / 2, y: size.height / 2 - 37)
+    }
+}
 
 #Preview {
     IntroView {}

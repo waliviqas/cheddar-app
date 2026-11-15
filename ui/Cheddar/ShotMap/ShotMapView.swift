@@ -21,37 +21,10 @@ struct ShotMapView: View {
     var body: some View {
         ZStack {
             Theme.background.ignoresSafeArea()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack(spacing: 20) {
-                        Stat(title: "SHOTS", value: "\(shots.count)")
-                        Stat(title: "TOP SPEED", value: speeds.max().mphText, highlight: true)
-                        Stat(title: "AVERAGE", value: average.mphText)
-                        Spacer()
-                    }
-                    MapCard(title: pickedSession.map { dayTitle($0.date) } ?? "ALL SESSIONS", hint: "Tap a dot") {
-                        NetMapView(shots: shots, callout: callout, popped: popped, onSquare: pop) { shot in watch(shot) }
-                    }
-                    Text("SESSIONS")
-                        .font(.caption.weight(.bold))
-                        .kerning(1.5)
-                        .foregroundStyle(.white.opacity(0.6))
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 12) {
-                            SessionMapCard(title: "All", detail: "TOP \(allShots.compactMap(\.mph).max().mphText)",
-                                           shots: allShots, picked: picked == nil) { picked = nil }
-                            ForEach(store.sessions) { session in
-                                SessionMapCard(title: session.date.formatted(.dateTime.month(.abbreviated).day()),
-                                               detail: "TOP \(session.topSpeed.mphText)",
-                                               shots: session.shots, picked: picked == session.id) { picked = session.id }
-                            }
-                        }
-                        .padding(.horizontal, 20)
-                    }
-                    .padding(.horizontal, -20)
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
+            if store.sessions.isEmpty {
+                NoSessionsYet()
+            } else {
+                shotMap
             }
         }
         .overlayPreferenceValue(NetBounds.self) { anchor in
@@ -72,6 +45,41 @@ struct ShotMapView: View {
         .animation(.easeInOut(duration: 0.3), value: picked)
         .fullScreenCover(item: $replay, onDismiss: keepUpright) {
             ShotReplayView(shot: $0, session: pickedSession ?? store.session(of: $0))
+        }
+    }
+
+    private var shotMap: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 20) {
+                    Stat(title: "SHOTS", value: "\(shots.count)")
+                    Stat(title: "TOP SPEED", value: speeds.max().mphText, highlight: true)
+                    Stat(title: "AVERAGE", value: average.mphText)
+                    Spacer()
+                }
+                MapCard(title: pickedSession.map { dayTitle($0.date) } ?? "ALL SESSIONS", hint: "Tap a dot") {
+                    NetMapView(shots: shots, callout: callout, popped: popped, onSquare: pop) { shot in watch(shot) }
+                }
+                Text("SESSIONS")
+                    .font(.caption.weight(.bold))
+                    .kerning(1.5)
+                    .foregroundStyle(.white.opacity(0.6))
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        SessionMapCard(title: "All", detail: "TOP \(allShots.compactMap(\.mph).max().mphText)",
+                                       shots: allShots, picked: picked == nil) { picked = nil }
+                        ForEach(store.sessions) { session in
+                            SessionMapCard(title: session.date.formatted(.dateTime.month(.abbreviated).day()),
+                                           detail: "TOP \(session.topSpeed.mphText)",
+                                           shots: session.shots, picked: picked == session.id) { picked = session.id }
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                }
+                .padding(.horizontal, -20)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
         }
     }
 

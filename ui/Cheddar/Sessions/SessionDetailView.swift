@@ -21,7 +21,7 @@ struct SessionDetailView: View {
                         Stat(title: "AVERAGE", value: session.average.mphText)
                         Stat(title: "LENGTH", value: session.duration.length)
                     }
-                    if let video = session.video.flatMap(Demo.video) {
+                    if let video = session.video.flatMap(SavedVideos.url) {
                         Button { letScreenTurn(); watching = true } label: {
                             Label("Watch full session", systemImage: "play.fill")
                                 .font(.headline)

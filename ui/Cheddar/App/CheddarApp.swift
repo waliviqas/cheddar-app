@@ -1,3 +1,4 @@
+import GoogleSignIn
 import SwiftUI
 
 /*
@@ -11,6 +12,7 @@ struct CheddarApp: App {
         WindowGroup {
             AppFlow()
                 .preferredColorScheme(.dark)
+                .onOpenURL { GIDSignIn.sharedInstance.handle($0) }  // Google's sign-in hands back here
         }
     }
 }

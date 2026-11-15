@@ -246,3 +246,56 @@ struct MapCard<Content: View>: View {
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(.white.opacity(0.08)))
     }
 }
+
+// The net opening seen from the front, split 3 × 3, with the square the puck went in lit up (the replay screen).
+struct NetSquareView: View {
+    let square: NetSquare
+    @State private var glow = false
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width, h = geo.size.height
+            ZStack(alignment: .topLeading) {
+                NetGridLines()
+                if let cell = square.cell {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Theme.cheddar)
+                        .frame(width: w / 3 - 4, height: h / 3 - 4)
+                        .shadow(color: Theme.cheddar.opacity(glow ? 0.9 : 0.3), radius: glow ? 14 : 4)
+                        .offset(x: w * CGFloat(cell.column) / 3 + 2, y: h * CGFloat(cell.row) / 3 + 2)
+                }
+                NetFrame(lit: square == .post)
+            }
+        }
+        .aspectRatio(72 / 48, contentMode: .fit)
+        .onAppear { withAnimation(.easeInOut(duration: 0.6).repeatForever()) { glow = true } }
+    }
+}
+
+// The faint 3 × 3 lines inside the net.
+struct NetGridLines: View {
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width, h = geo.size.height
+            Path { p in
+                for i in 1..<3 {
+                    p.move(to: CGPoint(x: w * CGFloat(i) / 3, y: 0))
+                    p.addLine(to: CGPoint(x: w * CGFloat(i) / 3, y: h))
+                    p.move(to: CGPoint(x: 0, y: h * CGFloat(i) / 3))
+                    p.addLine(to: CGPoint(x: w, y: h * CGFloat(i) / 3))
+                }
+            }
+            .stroke(.white.opacity(0.4), lineWidth: 1.5)
+        }
+    }
+}
+
+// The red posts and crossbar.
+struct NetFrame: View {
+    var lit = false
+
+    var body: some View {
+        UnevenRoundedRectangle(topLeadingRadius: 10, topTrailingRadius: 10)
+            .stroke(lit ? Theme.cheddar : Theme.goalRed, lineWidth: 5)
+    }
+}
