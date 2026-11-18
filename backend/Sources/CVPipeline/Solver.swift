@@ -50,6 +50,64 @@ enum Solver {
         fit.reversed().reduce(0) { $0 * time + $1 }
     }
 
+    // Keeps adjusting the starting guess until its misses stop shrinking. Each miss is how far one measurement is from the guess.
+    static func leastSquares(_ start: [Double], steps: [Double], iterations: Int = 100,
+                             _ misses: ([Double]) -> [Double]) -> (answer: [Double], error: Double) {
+        var answer = start
+        var current = misses(answer)
+        var error = squaredTotal(current)
+        guard steps.count == start.count else { return (answer, error) }
+
+        // Higher caution means smaller adjustments.
+        var caution = 1e-3
+        for _ in 0..<iterations {
+            let slopes = answer.indices.map { index in
+                var nudged = answer
+                nudged[index] += steps[index]
+                return zip(misses(nudged), current).map { ($0 - $1) / steps[index] }
+            }
+            var improved = false
+            for _ in 0..<10 where !improved {
+                if let change = adjustment(slopes, current, caution: caution) {
+                    let trial = zip(answer, change).map { $0 + $1 }
+                    let trialMisses = misses(trial)
+                    let trialError = squaredTotal(trialMisses)
+                    if trialError < error {
+                        let gain = (error - trialError) / error
+                        answer = trial
+                        current = trialMisses
+                        error = trialError
+                        caution = max(caution / 10, 1e-12)
+                        if gain < 1e-12 { return (answer, error) }
+                        improved = true
+                        continue
+                    }
+                }
+                caution *= 10
+            }
+            if !improved { break }
+        }
+        return (answer, error)
+    }
+
+    private static func adjustment(_ slopes: [[Double]], _ misses: [Double], caution: Double) -> [Double]? {
+        let equations = slopes.indices.map { row -> [Double] in
+            var equation = slopes.indices.map { dot(slopes[row], slopes[$0]) }
+            // The tiny extra stops a value that affects nothing from blocking the solve.
+            equation[row] = equation[row] * (1 + caution) + 1e-12
+            return equation + [-dot(slopes[row], misses)]
+        }
+        return solveLinear(equations)
+    }
+
+    private static func dot(_ a: [Double], _ b: [Double]) -> Double {
+        zip(a, b).reduce(0) { $0 + $1.0 * $1.1 }
+    }
+
+    private static func squaredTotal(_ misses: [Double]) -> Double {
+        dot(misses, misses)
+    }
+
     private static func scaled(_ row: [Double]) -> [Double] {
         let biggest = row.dropLast().map(abs).max() ?? 0
         return biggest > 0 ? row.map { $0 / biggest } : row

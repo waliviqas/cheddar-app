@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import CVPipeline
 
@@ -188,11 +189,132 @@ struct SolverTests {
 
         #expect(isClose(times.map { Solver.polyval(fit, $0) }, to: heights))
     }
+
+    @Test("solves a simple straight-line problem")
+    func simpleLineProblem() {
+        let result = Solver.leastSquares([0, 0], steps: [1e-4, 1e-4]) { guess in
+            (0..<5).map { guess[0] + guess[1] * Double($0) - (2 + 3 * Double($0)) }
+        }
+
+        #expect(isClose(result.answer, to: [2, 3], within: 1e-6))
+    }
+
+    @Test("solves a hard curved problem")
+    func hardCurvedProblem() {
+        let result = Solver.leastSquares([-1.2, 1], steps: [1e-6, 1e-6], iterations: 500) { guess in
+            [10 * (guess[1] - guess[0] * guess[0]), 1 - guess[0]]
+        }
+
+        #expect(isClose(result.answer, to: [1, 1], within: 1e-4))
+    }
+
+    @Test("a perfect starting guess stays put")
+    func perfectStart() {
+        let result = Solver.leastSquares([2], steps: [1e-4]) { guess in [guess[0] - 2] }
+
+        #expect(result.answer == [2])
+        #expect(result.error == 0)
+    }
+
+    @Test("noisy data ends with less error than it started with")
+    func noisyData() {
+        let noise = [0.1, -0.2, 0.15, -0.05, 0.08, -0.12]
+        let misses: ([Double]) -> [Double] = { guess in
+            noise.indices.map { guess[0] * exp(guess[1] * Double($0)) - (2 * exp(0.3 * Double($0)) + noise[$0]) }
+        }
+        let startingError = misses([1, 0.1]).reduce(0) { $0 + $1 * $1 }
+
+        let result = Solver.leastSquares([1, 0.1], steps: [1e-5, 1e-5], misses)
+
+        #expect(result.error < startingError)
+    }
+
+    @Test("handles values of very different sizes")
+    func veryDifferentSizes() {
+        let result = Solver.leastSquares([1, 1], steps: [1e-7, 1e-1]) { guess in
+            [1e4 * (guess[0] - 0.002), 1e-3 * (guess[1] - 3000)]
+        }
+
+        #expect(abs(result.answer[0] - 0.002) <= 1e-6)
+        #expect(abs(result.answer[1] - 3000) <= 1e-3)
+    }
+
+    @Test("more unknowns than clues still matches every clue")
+    func moreUnknownsThanClues() {
+        let result = Solver.leastSquares([0, 0], steps: [1e-4, 1e-4]) { guess in [guess[0] + guess[1] - 4] }
+
+        #expect(result.error <= 1e-12)
+    }
+
+    @Test("a value that affects nothing stays unchanged")
+    func valueThatAffectsNothing() {
+        let result = Solver.leastSquares([5, 7], steps: [1e-4, 1e-4]) { guess in [guess[0] - 2] }
+
+        #expect(isClose(result.answer, to: [2, 7], within: 1e-6))
+    }
+
+    @Test("zero tries returns the starting guess")
+    func zeroTries() {
+        let result = Solver.leastSquares([5], steps: [1e-4], iterations: 0) { guess in [guess[0] - 2] }
+
+        #expect(result.answer == [5])
+        #expect(result.error == 9)
+    }
+
+    @Test("nothing to solve for returns an empty answer and the starting error")
+    func nothingToSolveFor() {
+        let result = Solver.leastSquares([], steps: []) { _ in [1, 2] }
+
+        #expect(result.answer.isEmpty)
+        #expect(result.error == 5)
+    }
+
+    @Test("no measurements returns the starting guess with zero error")
+    func noMeasurements() {
+        let result = Solver.leastSquares([1, 2], steps: [1e-4, 1e-4]) { _ in [] }
+
+        #expect(result.answer == [1, 2])
+        #expect(result.error == 0)
+    }
+
+    @Test("an unreadable first guess returns the starting guess")
+    func unreadableFirstGuess() {
+        let result = Solver.leastSquares([1], steps: [1e-4]) { _ in [.nan] }
+
+        #expect(result.answer == [1])
+    }
+
+    @Test("an unreadable new guess is rejected and the best valid answer is kept")
+    func unreadableNewGuess() {
+        let result = Solver.leastSquares([3], steps: [1e-4]) { guess in
+            guess[0] < 2.5 ? [.nan] : [guess[0] - 2]
+        }
+
+        #expect(result.answer[0] >= 2.5)
+        #expect(result.answer[0] < 3)
+        #expect(result.error < 1)
+    }
+
+    @Test("an adjustment size of zero returns the starting guess")
+    func zeroAdjustmentSize() {
+        let result = Solver.leastSquares([5], steps: [0]) { guess in [guess[0] - 2] }
+
+        #expect(result.answer == [5])
+        #expect(result.error == 9)
+    }
+
+    @Test("too few adjustment sizes returns the starting guess")
+    func tooFewAdjustmentSizes() {
+        let result = Solver.leastSquares([1, 2], steps: [1e-4]) { guess in [guess[0], guess[1]] }
+
+        #expect(result.answer == [1, 2])
+        #expect(result.error == 5)
+    }
 }
 
-private func isClose(_ found: [Double]?, to answer: [Double]) -> Bool {
+private func isClose(_ found: [Double]?, to answer: [Double], within tolerance: Double = 1e-9) -> Bool {
     guard let found, found.count == answer.count else { return false }
-    return zip(found, answer).allSatisfy { abs($0 - $1) <= 1e-9 }
+    return zip(found, answer).allSatisfy { abs($0 - $1) <= tolerance }
 }
 
 private func isNoAnswer(_ fit: [Double], size: Int) -> Bool {
