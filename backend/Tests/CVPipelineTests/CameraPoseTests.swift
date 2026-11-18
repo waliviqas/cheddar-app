@@ -30,7 +30,7 @@ struct CameraPoseTests {
 
     /*
     - Same pretend phone, but each corner is nudged 3 px in a different direction, like a real-life miss
-    - CameraPose should still find the phone within 6 inches and its aim within 2 degrees
+    - CameraPose should still find the phone within 3 inches and its aim within 1 degree
     */
     @Test("stays close when the corners are a few pixels off")
     func slightlyOffCorners() throws {
@@ -40,15 +40,69 @@ struct CameraPoseTests {
 
         let pose = try #require(CameraPose(corners: corners, lens: phone.lens))
 
-        #expect(simd_distance(pose.position, phone.position) <= 6)
-        #expect(degrees(between: pose.forward, phone.forward) <= 2)
+        #expect(simd_distance(pose.position, phone.position) <= 3)
+        #expect(degrees(between: pose.forward, phone.forward) <= 1)
+    }
+
+    /*
+    - Same pretend phone, each corner nudged 2 px in a different direction
+    - The phone's height should move by at most 1 inch compared with perfect corners
+    */
+    @Test("a small tap mistake barely moves the phone's height")
+    func smallTapMistake() throws {
+        let phone = PretendPhone(at: SIMD3(-30, 233, 61.5), aimedAt: SIMD3(60, 0, 24))
+        let nudges = [CGPoint(x: 2, y: 0), CGPoint(x: 0, y: -2), CGPoint(x: -2, y: 0), CGPoint(x: 0, y: 2)]
+        let corners = zip(phone.picture(of: insideCorners), nudges).map { CGPoint(x: $0.x + $1.x, y: $0.y + $1.y) }
+
+        let perfect = try #require(CameraPose(corners: phone.picture(of: insideCorners), lens: phone.lens))
+        let nudged = try #require(CameraPose(corners: corners, lens: phone.lens))
+
+        #expect(abs(nudged.heightAboveIce - perfect.heightAboveIce) <= 1, "height moved \(nudged.heightAboveIce - perfect.heightAboveIce) in")
+    }
+
+    /*
+    - Wali's 9 rink clips from Nov 16, his raw taps on the net's inside corners, lens zoom 1475 (iPhone 14 Plus at 1x)
+    - Put the net's 4 corners back into the picture from where CameraPose says the phone is:
+      each one should land within 2 px of Wali's tap
+    */
+    @Test("lines up with its own corners")
+    func linesUpWithTaps() throws {
+        let lens = LensInfo(width: 1920, height: 1080, centerX: 960, centerY: 540, zoom: 1475)
+
+        for clip in try loadAnswers("1x-measured-nov16/net-corners.json") {
+            let taps = clip.net.corners
+            let pose = try #require(CameraPose(corners: taps, lens: lens), "no pose in \(clip.clip)")
+
+            for (corner, tap) in zip(insideCorners, taps) {
+                let c = pose.toCamera * (corner - pose.position)
+                let landed = CGPoint(x: lens.centerX + lens.zoom * c.x / c.z, y: lens.centerY + lens.zoom * c.y / c.z)
+                let miss = hypot(landed.x - tap.x, landed.y - tap.y)
+                #expect(miss <= 2, "corner missed its tap by \(miss) px in \(clip.clip)")
+            }
+        }
+    }
+
+    /*
+    - Same 9 clips; the tripod never moved between them (tape: lens 61.5 in off the ice)
+    - Every clip should put the phone 58–62 in off the ice, all within 2 in of each other
+    */
+    @Test("same phone height every clip")
+    func sameHeightEveryClip() throws {
+        let lens = LensInfo(width: 1920, height: 1080, centerX: 960, centerY: 540, zoom: 1475)
+
+        let heights = try loadAnswers("1x-measured-nov16/net-corners.json").map { clip in
+            try #require(CameraPose(corners: clip.net.corners, lens: lens), "no pose in \(clip.clip)").heightAboveIce
+        }
+
+        for h in heights { #expect((58...62).contains(h), "camera height \(h) in") }
+        #expect(heights.max()! - heights.min()! <= 2, "heights spread \(heights.min()!)–\(heights.max()!) in")
     }
 
     /*
     - Wali's 3 newest rink clips, filmed on an iPhone 14 Plus at 1x, where Wali measured the setup with a tape measure
     - The corners come from NetCornerFinder (taps = Wali's clicks, plus SAM 3's saved colored-in frame), like the real app
     - The lens zoom is the typical iPhone 1x value, not measured for this phone, so the limits are looser:
-      the camera should come out within 6 in of 61.5 in off the ice, and its tripod within 12 in of 233 in
+      the camera should come out within 3 in of 61.5 in off the ice, and its tripod within 12 in of 233 in
       from the middle of the goal line, measured along the ice (that's what Wali taped: middle of tripod to middle of goal line)
     */
     @Test("matches Wali's tape-measured setup in the newest rink clips")
@@ -64,7 +118,7 @@ struct CameraPoseTests {
 
             let pose = try #require(CameraPose(corners: corners, lens: lens), "no pose in \(name)")
 
-            #expect(abs(pose.heightAboveIce - 61.5) <= 6, "camera height \(pose.heightAboveIce) in for \(name)")
+            #expect(abs(pose.heightAboveIce - 61.5) <= 3, "camera height \(pose.heightAboveIce) in for \(name)")
             let tripodToMiddle = hypot(pose.position.x - 36, pose.position.y)   // along the ice, to the goal line's middle (x = 36)
             #expect(abs(tripodToMiddle - 233) <= 12, "tripod to middle of goal line \(tripodToMiddle) in for \(name)")
         }
