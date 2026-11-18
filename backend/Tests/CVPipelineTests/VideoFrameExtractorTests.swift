@@ -3,6 +3,21 @@ import AVFoundation
 import CoreGraphics
 @testable import CVPipeline
 
+private func makeFrame(puckAt center: CGPoint, size: CGSize = CGSize(width: 640, height: 480)) -> CGImage {
+    let ctx = CGContext(
+        data: nil,
+        width: Int(size.width), height: Int(size.height),
+        bitsPerComponent: 8, bytesPerRow: 0,
+        space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+    )!
+    ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+    ctx.fill(CGRect(origin: .zero, size: size))
+    ctx.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 1))
+    ctx.fillEllipse(in: CGRect(x: center.x - 10, y: center.y - 10, width: 20, height: 20))
+    return ctx.makeImage()!
+}
+
 // Writes a list of frames into a real .mov file in the temp folder, so the test
 // knows exactly how many frames the video holds.
 // `ticks` says which 1/fps slot each frame lands on; leave it out for evenly spaced frames.
