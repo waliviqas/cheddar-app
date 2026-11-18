@@ -119,6 +119,26 @@ struct TwoFramesBackTests {
         #expect(results.count == slots.count - 8)
         #expect(results.allSatisfy(isOnlyThePuck))
     }
+
+    @Test("flickering lights leave only the puck when frames drop on both sides")
+    func flickerWithDropsOnBothSides() throws {
+        let slots = (0..<18).filter { ![6, 8].contains($0) }
+
+        let results = try flickerResults(slots)
+
+        #expect(results.count == slots.count - 8)
+        #expect(results.allSatisfy(isOnlyThePuck))
+    }
+
+    @Test("flickering lights leave only the puck when the frames one flicker away are missing")
+    func flickerWithOneFlickerAwayMissing() throws {
+        let slots = (0..<18).filter { ![5, 9].contains($0) }
+
+        let results = try flickerResults(slots)
+
+        #expect(results.count == slots.count - 8)
+        #expect(results.allSatisfy(isOnlyThePuck))
+    }
 }
 
 private struct Pixel {

@@ -62,11 +62,26 @@ struct TwoFramesBack {
 
     private func pixelsDarkened(in middle: Int) -> [Bool] {
         let now = darkness[middle]
-        let before = darkness[(middle - Self.framesToCompare + Self.framesKept) % Self.framesKept]
-        let after = darkness[(middle + Self.framesToCompare) % Self.framesKept]
+        let before = darkness[comparison(to: middle, step: -1)]
+        let after = darkness[comparison(to: middle, step: 1)]
         return now.indices.map {
             min(Int(now[$0]) - Int(before[$0]), Int(now[$0]) - Int(after[$0])) > Self.minDarkening
         }
+    }
+
+    // Rink lights flicker 120 times a second, so compare frames at the same point in the flicker: one flicker away, else two.
+    private func comparison(to middle: Int, step: Int) -> Int {
+        for flickers in [1.0, 2.0] {
+            for distance in 1...Self.framesEachSide {
+                let frame = slot(middle + step * distance)
+                if abs(abs(times[frame] - times[middle]) - flickers / 120) < 0.001 { return frame }
+            }
+        }
+        return slot(middle + step * Self.framesToCompare)
+    }
+
+    private func slot(_ position: Int) -> Int {
+        (position + Self.framesKept) % Self.framesKept
     }
 
     private func spots(in darkened: [Bool]) -> [Spot] {
