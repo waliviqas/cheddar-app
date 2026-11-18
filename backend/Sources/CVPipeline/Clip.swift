@@ -30,7 +30,8 @@ enum Clip {
 
         let reader = try AVAssetReader(asset: asset)
         if start > 0 || end != nil {
-            reader.timeRange = CMTimeRange(start: CMTime(seconds: start, preferredTimescale: 24000),
+            // A window starting between frames gets the earlier frame with its time changed to the start. Opening early lets the time check below drop it.
+            reader.timeRange = CMTimeRange(start: CMTime(seconds: max(start - 0.01, 0), preferredTimescale: 24000),
                                            end: CMTime(seconds: last, preferredTimescale: 24000))
         }
         let output = AVAssetReaderTrackOutput(track: track, outputSettings: [
@@ -53,5 +54,36 @@ enum Clip {
             }
         }
         if reader.status == .failed { throw reader.error ?? CocoaError(.fileReadCorruptFile) }
+    }
+
+    // Returns the first frame at or after this time.
+    static func picture(_ url: URL, at time: Double) async throws -> Picture? {
+        var found: Picture?
+        do {
+            try await eachFrame(url, from: time) { buffer, _ in
+                found = copied(buffer)
+                throw FoundFrame()
+            }
+        } catch is FoundFrame {}
+        return found
+    }
+
+    private struct FoundFrame: Error {}
+
+    // Video stores each pixel as blue, green, red, then a spare number. Picture wants red, green, blue.
+    private static func copied(_ buffer: CVPixelBuffer) -> Picture {
+        let width = CVPixelBufferGetWidth(buffer), height = CVPixelBufferGetHeight(buffer)
+        let rowLength = CVPixelBufferGetBytesPerRow(buffer)
+        let pixels = CVPixelBufferGetBaseAddress(buffer)!.assumingMemoryBound(to: UInt8.self)
+        var rgb = [UInt8](repeating: 0, count: width * height * 3)
+        for y in 0..<height {
+            for x in 0..<width {
+                let from = y * rowLength + x * 4, to = (y * width + x) * 3
+                rgb[to] = pixels[from + 2]
+                rgb[to + 1] = pixels[from + 1]
+                rgb[to + 2] = pixels[from]
+            }
+        }
+        return Picture(width: width, height: height, rgb: rgb)
     }
 }

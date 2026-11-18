@@ -144,6 +144,130 @@ struct ClipTests {
     func soundOnly() async throws {
         #expect(try await frameTimes(try makeSoundFile()).isEmpty)
     }
+
+    @Test("an exact frame time returns that frame")
+    func exactFrameTime() async throws {
+        let video = try makeVideo(frames: solidFrames([.red, .green, .blue, .white]), fps: 10)
+
+        let found = try #require(try await Clip.picture(video, at: 0.2))
+
+        #expect(isBlue(found.color(32, 32)))
+    }
+
+    @Test("a time between two frames returns the next frame")
+    func timeBetweenFrames() async throws {
+        let video = try makeVideo(frames: solidFrames([.red, .green, .blue, .white]), fps: 10)
+
+        let found = try #require(try await Clip.picture(video, at: 0.15))
+
+        #expect(isBlue(found.color(32, 32)))
+    }
+
+    @Test("a time inside a long dropped-frame gap returns the first frame after it")
+    func timeInsideGap() async throws {
+        let video = try makeVideo(frames: solidFrames([.red, .green, .blue, .white]), fps: 10, ticks: [0, 1, 8, 9])
+
+        let found = try #require(try await Clip.picture(video, at: 0.4))
+
+        #expect(isBlue(found.color(32, 32)))
+    }
+
+    @Test("a time past the end of the video returns no picture")
+    func timePastTheEnd() async throws {
+        let video = try makeVideo(frames: solidFrames([.red, .green, .blue, .white]), fps: 10)
+
+        #expect(try await Clip.picture(video, at: 5) == nil)
+    }
+
+    @Test("a negative time returns the first frame")
+    func negativeTime() async throws {
+        let video = try makeVideo(frames: solidFrames([.red, .green, .blue, .white]), fps: 10)
+
+        let found = try #require(try await Clip.picture(video, at: -1))
+
+        #expect(isRed(found.color(32, 32)))
+    }
+
+    @Test("red stays red and blue stays blue")
+    func colorsStayCorrect() async throws {
+        let video = try makeVideo(frames: solidFrames([.red, .blue]), fps: 10)
+
+        let first = try #require(try await Clip.picture(video, at: 0))
+        let second = try #require(try await Clip.picture(video, at: 0.1))
+
+        #expect(isRed(first.color(32, 32)))
+        #expect(isBlue(second.color(32, 32)))
+    }
+
+    @Test("the picture stays upright and full size")
+    func uprightAndFullSize() async throws {
+        let video = try makeVideo(frames: [redOverBlueFrame(width: 64, height: 48)], fps: 10)
+
+        let found = try #require(try await Clip.picture(video, at: 0))
+
+        #expect(found.width == 64)
+        #expect(found.height == 48)
+        #expect(isRed(found.color(32, 4)))
+        #expect(isBlue(found.color(32, 43)))
+    }
+
+    @Test("a missing file reports an error when grabbing a picture")
+    func missingFileForPicture() async {
+        let missing = FileManager.default.temporaryDirectory.appendingPathComponent("missing-\(UUID().uuidString).mov")
+
+        await #expect(throws: (any Error).self) {
+            try await Clip.picture(missing, at: 0)
+        }
+    }
+}
+
+private enum Paint {
+    case red, green, blue, white
+
+    var color: CGColor {
+        switch self {
+        case .red: CGColor(red: 1, green: 0, blue: 0, alpha: 1)
+        case .green: CGColor(red: 0, green: 1, blue: 0, alpha: 1)
+        case .blue: CGColor(red: 0, green: 0, blue: 1, alpha: 1)
+        case .white: CGColor(red: 1, green: 1, blue: 1, alpha: 1)
+        }
+    }
+}
+
+private func blankContext(width: Int, height: Int) -> CGContext {
+    CGContext(
+        data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+        space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+    )!
+}
+
+private func solidFrames(_ paints: [Paint]) -> [CGImage] {
+    paints.map { paint in
+        let context = blankContext(width: 64, height: 64)
+        context.setFillColor(paint.color)
+        context.fill(CGRect(x: 0, y: 0, width: 64, height: 64))
+        return context.makeImage()!
+    }
+}
+
+private func redOverBlueFrame(width: Int, height: Int) -> CGImage {
+    let context = blankContext(width: width, height: height)
+    context.setFillColor(Paint.blue.color)
+    context.fill(CGRect(x: 0, y: 0, width: width, height: height / 2))
+    context.setFillColor(Paint.red.color)
+    context.fill(CGRect(x: 0, y: height / 2, width: width, height: height - height / 2))
+    return context.makeImage()!
+}
+
+private func isRed(_ found: (r: Int, g: Int, b: Int)?) -> Bool {
+    guard let found else { return false }
+    return found.r > 180 && found.g < 90 && found.b < 90
+}
+
+private func isBlue(_ found: (r: Int, g: Int, b: Int)?) -> Bool {
+    guard let found else { return false }
+    return found.b > 180 && found.r < 90 && found.g < 90
 }
 
 private struct StopReading: Error {}
