@@ -18,7 +18,8 @@ A pixel counts when it's darker than in the frames around it, so anything sittin
 */
 struct TwoFramesBack {
     private static let framesKept = 9, framesEachSide = 4, framesToCompare = 2
-    private static let minDarkening = 30
+    private static let minDarkening: Int16 = 30, minStrength: Int16 = 50
+    private static let minSize = 20, maxSize = 1500, maxWidth = 100, maxHeight = 50
 
     let rows: Range<Int>, columns: Range<Int>
     private(set) var frames: [SpotFrame] = []
@@ -44,8 +45,9 @@ struct TwoFramesBack {
         guard framesSeen >= Self.framesKept else { return }
 
         let middle = (framesSeen - 1 - Self.framesEachSide) % Self.framesKept
-        let darkened = pixelsDarkened(in: middle)
-        frames.append(SpotFrame(time: times[middle], spots: spots(in: darkened), changed: darkened.count { $0 }))
+        let darkening = pixelDarkening(in: middle)
+        let changed = darkening.count { $0 > Self.minDarkening }
+        frames.append(SpotFrame(time: times[middle], spots: spots(in: darkening), changed: changed))
     }
 
     // Black and blue pucks both have little red and green, so darkness ignores blue.
@@ -60,12 +62,12 @@ struct TwoFramesBack {
         }
     }
 
-    private func pixelsDarkened(in middle: Int) -> [Bool] {
+    private func pixelDarkening(in middle: Int) -> [Int16] {
         let now = darkness[middle]
         let before = darkness[comparison(to: middle, step: -1)]
         let after = darkness[comparison(to: middle, step: 1)]
         return now.indices.map {
-            min(Int(now[$0]) - Int(before[$0]), Int(now[$0]) - Int(after[$0])) > Self.minDarkening
+            Int16(min(Int(now[$0]) - Int(before[$0]), Int(now[$0]) - Int(after[$0])))
         }
     }
 
@@ -84,28 +86,43 @@ struct TwoFramesBack {
         (position + Self.framesKept) % Self.framesKept
     }
 
-    private func spots(in darkened: [Bool]) -> [Spot] {
+    private func spots(in darkening: [Int16]) -> [Spot] {
         let width = columns.count
-        var waiting = darkened
+        var waiting = darkening.map { $0 > Self.minDarkening }
         var found: [Spot] = []
         for seed in waiting.indices where waiting[seed] {
-            var stack = [seed], size = 0, totalX = 0, totalY = 0
+            var stack = [seed], pixels: [Int] = []
             waiting[seed] = false
             while let pixel = stack.popLast() {
+                pixels.append(pixel)
                 let x = pixel % width, y = pixel / width
-                size += 1
-                totalX += x
-                totalY += y
-                let touching = [x > 0 ? pixel - 1 : nil, x + 1 < width ? pixel + 1 : nil,
-                                y > 0 ? pixel - width : nil, pixel + width < waiting.count ? pixel + width : nil]
-                for case let next? in touching where waiting[next] {
-                    waiting[next] = false
-                    stack.append(next)
+                for nextY in max(y - 1, 0)...min(y + 1, rows.count - 1) {
+                    for nextX in max(x - 1, 0)...min(x + 1, width - 1) where waiting[nextY * width + nextX] {
+                        waiting[nextY * width + nextX] = false
+                        stack.append(nextY * width + nextX)
+                    }
                 }
             }
-            found.append(Spot(x: Double(totalX) / Double(size) + Double(columns.lowerBound),
-                              y: Double(totalY) / Double(size) + Double(rows.lowerBound), size: size))
+            if let spot = puckSizedSpot(from: pixels, darkening) { found.append(spot) }
         }
         return found
+    }
+
+    private func puckSizedSpot(from pixels: [Int], _ darkening: [Int16]) -> Spot? {
+        guard (Self.minSize...Self.maxSize).contains(pixels.count) else { return nil }
+
+        let across = pixels.map { $0 % columns.count }, down = pixels.map { $0 / columns.count }
+        guard across.max()! - across.min()! < Self.maxWidth,
+              down.max()! - down.min()! < Self.maxHeight else { return nil }
+
+        // Most of the spot must darken clearly, so a faint shadow doesn't count.
+        let strengths = pixels.map { darkening[$0] }
+        guard strengths.sorted()[strengths.count * 9 / 10] >= Self.minStrength else { return nil }
+
+        // Darker pixels pull the middle toward them, because a puck's blurred edge is only faintly dark.
+        let total = strengths.reduce(0.0) { $0 + Double($1) }
+        let x = zip(across, strengths).reduce(0.0) { $0 + Double($1.0) * Double($1.1) } / total
+        let y = zip(down, strengths).reduce(0.0) { $0 + Double($1.0) * Double($1.1) } / total
+        return Spot(x: x + Double(columns.lowerBound), y: y + Double(rows.lowerBound), size: pixels.count)
     }
 }

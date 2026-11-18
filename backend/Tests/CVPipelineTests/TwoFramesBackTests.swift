@@ -139,6 +139,100 @@ struct TwoFramesBackTests {
         #expect(results.count == slots.count - 8)
         #expect(results.allSatisfy(isOnlyThePuck))
     }
+
+    @Test("two dark things moving are two spots")
+    func twoDarkThings() throws {
+        let results = try spotFrames(9) { index in
+            try makeFrame { x, y in
+                let left = 20 + 16 * index
+                let isSecondThing = (left..<left + 12).contains(x) && (2..<14).contains(y)
+                return isInSquare(x, y, left: left) || isSecondThing ? black : ice
+            }
+        }
+
+        #expect(results[0].spots.count == 2)
+        #expect(results[0].spots.contains { isAtPuck($0) })
+        #expect(results[0].spots.contains { abs($0.x - 89.5) <= 0.001 && abs($0.y - 7.5) <= 0.001 })
+    }
+
+    @Test("a spot of 19 pixels is too small to be a puck")
+    func tooSmall() throws {
+        #expect(try spotFrames(9, blockOfPixels(19, width: 5))[0].spots.isEmpty)
+    }
+
+    @Test("a spot of 20 pixels is found")
+    func smallestSpot() throws {
+        let spots = try spotFrames(9, blockOfPixels(20, width: 5))[0].spots
+
+        #expect(spots.count == 1)
+        #expect(spots.first?.size == 20)
+    }
+
+    @Test("a spot of 1,500 pixels is found")
+    func biggestSpot() throws {
+        let spots = try spotFrames(9, blockOfPixels(1500, width: 50))[0].spots
+
+        #expect(spots.count == 1)
+        #expect(spots.first?.size == 1500)
+    }
+
+    @Test("a spot of 1,501 pixels is too big to be a puck")
+    func tooBig() throws {
+        #expect(try spotFrames(9, blockOfPixels(1501, width: 50))[0].spots.isEmpty)
+    }
+
+    @Test("a spot 101 pixels wide is too long to be a puck")
+    func tooWide() throws {
+        #expect(try spotFrames(9, blockOfPixels(202, width: 101))[0].spots.isEmpty)
+    }
+
+    @Test("a spot 51 pixels tall is too tall to be a puck")
+    func tooTall() throws {
+        #expect(try spotFrames(9, blockOfPixels(102, width: 2))[0].spots.isEmpty)
+    }
+
+    @Test("a faint darkening is not a puck")
+    func faintDarkening() throws {
+        let result = try spotFrames(9, movingSquare(dimIce))[0]
+
+        #expect(result.changed == 144)
+        #expect(result.spots.isEmpty)
+    }
+
+    @Test("pixels touching only at a corner are one spot")
+    func touchingOnlyAtCorner() throws {
+        let shape = middleFrameShape { x, y in
+            ((100..<106).contains(x) && (10..<16).contains(y)) || ((106..<112).contains(x) && (16..<22).contains(y))
+        }
+
+        let spots = try spotFrames(9, shape)[0].spots
+
+        #expect(spots.count == 1)
+        #expect(spots.first?.size == 72)
+    }
+
+    @Test("the middle of a spot leans toward its darker side")
+    func leansTowardDarkerSide() throws {
+        let results = try spotFrames(9) { index in
+            try makeFrame { x, y in
+                guard index == 4, (100..<112).contains(x), (26..<38).contains(y) else { return ice }
+                return x < 106 ? black : gray
+            }
+        }
+        let spot = try #require(results[0].spots.first)
+
+        #expect(results[0].spots.count == 1)
+        #expect(abs(spot.x - 104.214) <= 0.001)
+        #expect(abs(spot.y - 31.5) <= 0.001)
+    }
+
+    @Test("a puck touching the edge of the search area is found")
+    func touchingSearchAreaEdge() throws {
+        let spots = try spotFrames(9, movingSquare(black), columns: 84..<320)[0].spots
+
+        #expect(spots.count == 1)
+        #expect(isAtPuck(spots.first))
+    }
 }
 
 private struct Pixel {
@@ -147,6 +241,7 @@ private struct Pixel {
 
 private let ice = Pixel(blue: 170, green: 170, red: 170)
 private let dimIce = Pixel(blue: 130, green: 130, red: 130)
+private let gray = Pixel(blue: 110, green: 110, red: 110)
 private let black = Pixel(blue: 20, green: 20, red: 20)
 private let blue = Pixel(blue: 255, green: 20, red: 20)
 private let white = Pixel(blue: 255, green: 255, red: 255)
@@ -188,6 +283,16 @@ private func movingSquare(_ color: Pixel) -> (Int) throws -> CVPixelBuffer {
 
 private func stillSquare(_ color: Pixel) -> (Int) throws -> CVPixelBuffer {
     { _ in try makeFrame { x, y in isInSquare(x, y, left: 84) ? color : ice } }
+}
+
+private func middleFrameShape(_ isInShape: @escaping (Int, Int) -> Bool) -> (Int) throws -> CVPixelBuffer {
+    { index in try makeFrame { x, y in index == 4 && isInShape(x, y) ? black : ice } }
+}
+
+private func blockOfPixels(_ count: Int, width: Int) -> (Int) throws -> CVPixelBuffer {
+    middleFrameShape { x, y in
+        (100..<100 + width).contains(x) && y >= 10 && (y - 10) * width + (x - 100) < count
+    }
 }
 
 private func isInSquare(_ x: Int, _ y: Int, left: Int) -> Bool {
