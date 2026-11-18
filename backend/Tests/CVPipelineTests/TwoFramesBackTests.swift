@@ -89,6 +89,36 @@ struct TwoFramesBackTests {
 
         #expect(results[0].changed == 20_480)
     }
+
+    @Test("flickering lights leave only the puck")
+    func flickeringLights() throws {
+        let slots = Array(0..<16)
+
+        let results = try flickerResults(slots)
+
+        #expect(results.count == slots.count - 8)
+        #expect(results.allSatisfy(isOnlyThePuck))
+    }
+
+    @Test("flickering lights leave only the puck across a dropped frame")
+    func flickerAcrossDroppedFrame() throws {
+        let slots = (0..<16).filter { $0 != 6 }
+
+        let results = try flickerResults(slots)
+
+        #expect(results.count == slots.count - 8)
+        #expect(results.allSatisfy(isOnlyThePuck))
+    }
+
+    @Test("flickering lights leave only the puck across several dropped frames")
+    func flickerAcrossSeveralDroppedFrames() throws {
+        let slots = (0..<18).filter { !(6...9).contains($0) }
+
+        let results = try flickerResults(slots)
+
+        #expect(results.count == slots.count - 8)
+        #expect(results.allSatisfy(isOnlyThePuck))
+    }
 }
 
 private struct Pixel {
@@ -96,6 +126,7 @@ private struct Pixel {
 }
 
 private let ice = Pixel(blue: 170, green: 170, red: 170)
+private let dimIce = Pixel(blue: 130, green: 130, red: 130)
 private let black = Pixel(blue: 20, green: 20, red: 20)
 private let blue = Pixel(blue: 255, green: 20, red: 20)
 private let white = Pixel(blue: 255, green: 255, red: 255)
@@ -110,6 +141,25 @@ private func spotFrames(_ count: Int, _ draw: (Int) throws -> CVPixelBuffer,
         CVPixelBufferUnlockBaseAddress(frame, .readOnly)
     }
     return finder.frames
+}
+
+private func flickerResults(_ slots: [Int]) throws -> [SpotFrame] {
+    var finder = TwoFramesBack(rows: 0..<64, columns: 0..<320)
+    for slot in slots {
+        let frame = try makeFrame { x, y in
+            isInSquare(x, y, left: 20 + 16 * slot) ? black : (slot % 2 == 0 ? ice : dimIce)
+        }
+        CVPixelBufferLockBaseAddress(frame, .readOnly)
+        finder.add(frame, time: Double(slot) / 240)
+        CVPixelBufferUnlockBaseAddress(frame, .readOnly)
+    }
+    return finder.frames
+}
+
+private func isOnlyThePuck(_ result: SpotFrame) -> Bool {
+    guard result.spots.count == 1 else { return false }
+    let slot = (result.time * 240).rounded()
+    return abs(result.spots[0].x - (25.5 + 16 * slot)) <= 0.001 && abs(result.spots[0].y - 31.5) <= 0.001
 }
 
 private func movingSquare(_ color: Pixel) -> (Int) throws -> CVPixelBuffer {
