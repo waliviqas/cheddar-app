@@ -8,7 +8,7 @@ let package = Package(
         .library(name: "CVPipeline", targets: ["CVPipeline"]),
     ],
     targets: [
-        .target(name: "CVPipeline", resources: [.copy("Resources/PuckModel.mlmodel")]),
+        .target(name: "CVPipeline"),
         .testTarget(
             name: "CVPipelineTests",
             dependencies: ["CVPipeline"],
