@@ -141,9 +141,9 @@ struct CameraPoseTests {
         #expect(isFound(phone(at: Vec3(36, 240, 48))))
     }
 
-    @Test("the tester spot, 25 ft to the side and 8 ft up, is found")
+    @Test("the tester spot, 25 ft to the side on a 5 ft tripod, is found")
     func findsTesterSpot() {
-        #expect(isFound(phone(at: Vec3(335, 110.5, 96))))
+        #expect(isFound(phone(at: Vec3(335, 110.5, 60))))
     }
 
     @Test("a tripod 2 ft off the ground is found")
