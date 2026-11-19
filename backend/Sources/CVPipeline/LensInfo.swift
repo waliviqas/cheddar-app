@@ -1,3 +1,5 @@
+import CoreGraphics
+
 /*
 This class's only job is: hold the camera's lens numbers so CameraPose can use them.
 */
@@ -14,5 +16,12 @@ public struct LensInfo: Sendable {
         self.centerX = centerX
         self.centerY = centerY
         self.zoom = zoom
+    }
+}
+
+// Lets the old files that still use LensInfo build against the new CameraPose until they're deleted.
+extension CameraPose {
+    init?(corners: [CGPoint], lens: LensInfo) {
+        self.init(corners: corners.map { Vec2($0.x, $0.y) }, lens: Lens(zoom: lens.zoom, centerX: lens.centerX, centerY: lens.centerY))
     }
 }

@@ -1,199 +1,419 @@
 import Testing
-import Foundation
-import CoreGraphics
-import ImageIO
 import simd
 @testable import CVPipeline
 
-/*
-Net coordinates, in inches: x runs along the goal line from the left post to the right post,
-y runs out of the goal toward the shooter, z runs up from the ice.
-The opening's inside corners are top-left (0,0,48), top-right (72,0,48), bottom-right (72,0,0), bottom-left (0,0,0).
-*/
 @Suite("CameraPose")
 struct CameraPoseTests {
-
-    /*
-    - A pretend phone 233 in in front of the goal line, 30 in left of the left post, 61.5 in off the ice, aimed at the net
-    - The net's 4 inside corners are worked out by math for exactly where they'd land in its picture
-    - CameraPose should find the phone within 1 inch and which way it's aimed within half a degree
-    */
-    @Test("finds a pretend phone from perfect corners")
-    func perfectCorners() throws {
-        let phone = PretendPhone(at: SIMD3(-30, 233, 61.5), aimedAt: SIMD3(60, 0, 24))
-
-        let pose = try #require(CameraPose(corners: phone.picture(of: insideCorners), lens: phone.lens))
-
-        #expect(simd_distance(pose.position, phone.position) <= 1)
-        #expect(degrees(between: pose.forward, phone.forward) <= 0.5)
+    @Test("no turn changes nothing")
+    func noTurn() {
+        #expect(isClose(CameraPose.turn(Vec3(0, 0, 0)) * Vec3(3, 4, 12), to: Vec3(3, 4, 12)))
     }
 
-    /*
-    - Same pretend phone, but each corner is nudged 3 px in a different direction, like a real-life miss
-    - CameraPose should still find the phone within 3 inches and its aim within 1 degree
-    */
-    @Test("stays close when the corners are a few pixels off")
-    func slightlyOffCorners() throws {
-        let phone = PretendPhone(at: SIMD3(-30, 233, 61.5), aimedAt: SIMD3(60, 0, 24))
-        let nudges = [CGPoint(x: 3, y: 0), CGPoint(x: 0, y: -3), CGPoint(x: -3, y: 0), CGPoint(x: 0, y: 3)]
-        let corners = zip(phone.picture(of: insideCorners), nudges).map { CGPoint(x: $0.x + $1.x, y: $0.y + $1.y) }
-
-        let pose = try #require(CameraPose(corners: corners, lens: phone.lens))
-
-        #expect(simd_distance(pose.position, phone.position) <= 3)
-        #expect(degrees(between: pose.forward, phone.forward) <= 1)
+    @Test("a quarter turn around up turns along the goal line into toward the shooter")
+    func quarterTurn() {
+        #expect(isClose(CameraPose.turn(Vec3(0, 0, .pi / 2)) * Vec3(1, 0, 0), to: Vec3(0, 1, 0)))
     }
 
-    /*
-    - Same pretend phone, each corner nudged 2 px in a different direction
-    - The phone's height should move by at most 1 inch compared with perfect corners
-    */
-    @Test("a small tap mistake barely moves the phone's height")
-    func smallTapMistake() throws {
-        let phone = PretendPhone(at: SIMD3(-30, 233, 61.5), aimedAt: SIMD3(60, 0, 24))
-        let nudges = [CGPoint(x: 2, y: 0), CGPoint(x: 0, y: -2), CGPoint(x: -2, y: 0), CGPoint(x: 0, y: 2)]
-        let corners = zip(phone.picture(of: insideCorners), nudges).map { CGPoint(x: $0.x + $1.x, y: $0.y + $1.y) }
-
-        let perfect = try #require(CameraPose(corners: phone.picture(of: insideCorners), lens: phone.lens))
-        let nudged = try #require(CameraPose(corners: corners, lens: phone.lens))
-
-        #expect(abs(nudged.heightAboveIce - perfect.heightAboveIce) <= 1, "height moved \(nudged.heightAboveIce - perfect.heightAboveIce) in")
+    @Test("a turn keeps a 13-inch line 13 inches long")
+    func turnKeepsLength() {
+        #expect(abs(simd_length(CameraPose.turn(Vec3(0.3, -0.2, 0.5)) * Vec3(3, 4, 12)) - 13) <= 1e-9)
     }
 
-    /*
-    - Wali's 9 rink clips from Nov 16, his raw taps on the net's inside corners, lens zoom 1475 (iPhone 14 Plus at 1x)
-    - Put the net's 4 corners back into the picture from where CameraPose says the phone is:
-      each one should land within 2 px of Wali's tap
-    */
-    @Test("lines up with its own corners")
-    func linesUpWithTaps() throws {
-        let lens = LensInfo(width: 1920, height: 1080, centerX: 960, centerY: 540, zoom: 1475)
-
-        for clip in try loadAnswers("1x-measured-nov16/net-corners.json") {
-            let taps = clip.net.corners
-            let pose = try #require(CameraPose(corners: taps, lens: lens), "no pose in \(clip.clip)")
-
-            for (corner, tap) in zip(insideCorners, taps) {
-                let c = pose.toCamera * (corner - pose.position)
-                let landed = CGPoint(x: lens.centerX + lens.zoom * c.x / c.z, y: lens.centerY + lens.zoom * c.y / c.z)
-                let miss = hypot(landed.x - tap.x, landed.y - tap.y)
-                #expect(miss <= 2, "corner missed its tap by \(miss) px in \(clip.clip)")
-            }
-        }
+    @Test("a spot straight ahead lands in the middle of the picture")
+    func straightAhead() {
+        #expect(isClose(lookingAhead().pixel(of: Vec3(0, 0, 100)), to: Vec2(960, 540)))
     }
 
-    /*
-    - Same 9 clips; the tripod never moved between them (tape: lens 61.5 in off the ice)
-    - Every clip should put the phone 58–62 in off the ice, all within 2 in of each other
-    */
-    @Test("same phone height every clip")
-    func sameHeightEveryClip() throws {
-        let lens = LensInfo(width: 1920, height: 1080, centerX: 960, centerY: 540, zoom: 1475)
-
-        let heights = try loadAnswers("1x-measured-nov16/net-corners.json").map { clip in
-            try #require(CameraPose(corners: clip.net.corners, lens: lens), "no pose in \(clip.clip)").heightAboveIce
-        }
-
-        for h in heights { #expect((58...62).contains(h), "camera height \(h) in") }
-        #expect(heights.max()! - heights.min()! <= 2, "heights spread \(heights.min()!)–\(heights.max()!) in")
+    @Test("a spot to the right lands to the right")
+    func spotToTheRight() {
+        #expect(isClose(lookingAhead().pixel(of: Vec3(10, 0, 100)), to: Vec2(1107.02, 540)))
     }
 
-    /*
-    - Wali's 3 newest rink clips, filmed on an iPhone 14 Plus at 1x, where Wali measured the setup with a tape measure
-    - The corners come from NetCornerFinder (taps = Wali's clicks, plus SAM 3's saved colored-in frame), like the real app
-    - The lens zoom is the typical iPhone 1x value, not measured for this phone, so the limits are looser:
-      the camera should come out within 3 in of 61.5 in off the ice, and its tripod within 12 in of 233 in
-      from the middle of the goal line, measured along the ice (that's what Wali taped: middle of tripod to middle of goal line)
-    */
-    @Test("matches Wali's tape-measured setup in the newest rink clips")
-    func realClips() throws {
-        let lens = LensInfo(width: 1920, height: 1080, centerX: 960, centerY: 540, zoom: iPhone1xZoom)
-
-        for clip in try loadAnswers("net-outline.json") {
-            let name = clip.clip.replacingOccurrences(of: "1x-measured/", with: "").replacingOccurrences(of: ".MOV", with: "")
-            let frame = try #require(loadImage("net-frames/measured-\(name).jpg"))
-            let mask = try #require(loadImage("sam3-masks/measured-\(name).png").flatMap(FrameMask.init(image:)))
-            let found = NetCornerFinder().find(in: frame, taps: clip.net.corners, mask: mask).corners
-            let corners = try found.map { try #require($0, "no corner found in \(name)") }
-
-            let pose = try #require(CameraPose(corners: corners, lens: lens), "no pose in \(name)")
-
-            #expect(abs(pose.heightAboveIce - 61.5) <= 3, "camera height \(pose.heightAboveIce) in for \(name)")
-            let tripodToMiddle = hypot(pose.position.x - 36, pose.position.y)   // along the ice, to the goal line's middle (x = 36)
-            #expect(abs(tripodToMiddle - 233) <= 12, "tripod to middle of goal line \(tripodToMiddle) in for \(name)")
-        }
+    @Test("a lower spot lands lower")
+    func lowerSpot() {
+        #expect(isClose(lookingAhead().pixel(of: Vec3(0, 10, 100)), to: Vec2(960, 687.02)))
     }
 
-    /*
-    - Four "corners" that sit in a straight line, which no real net could make
-    - CameraPose should say it can't tell (nil) instead of making up a phone position
-    */
-    @Test("says it can't tell when the corners can't be a net")
-    func nonsenseCorners() {
-        let lens = LensInfo(width: 1920, height: 1080, centerX: 960, centerY: 540, zoom: iPhone1xZoom)
-        let inALine = [CGPoint(x: 500, y: 500), CGPoint(x: 600, y: 500), CGPoint(x: 700, y: 500), CGPoint(x: 800, y: 500)]
+    @Test("a spot twice as far away lands half as far from the middle")
+    func twiceAsFar() {
+        #expect(isClose(lookingAhead().pixel(of: Vec3(10, 0, 200)), to: Vec2(1033.51, 540)))
+    }
 
-        #expect(CameraPose(corners: inALine, lens: lens) == nil)
+    @Test("a different lens changes where a spot lands")
+    func differentLens() {
+        let pose = lookingAhead(lens: Lens(zoom: 2000, centerX: 1000, centerY: 600))
+
+        #expect(isClose(pose.pixel(of: Vec3(10, 0, 100)), to: Vec2(1200, 600)))
+    }
+
+    @Test("moving the phone changes where a spot lands")
+    func phoneMoved() {
+        let pose = CameraPose(position: Vec3(5, 0, 0), toCamera: matrix_identity_double3x3, lens: iPhone)
+
+        #expect(isClose(pose.pixel(of: Vec3(15, 0, 100)), to: Vec2(1107.02, 540)))
+    }
+
+    @Test("turning the phone toward a spot puts it in the middle")
+    func phoneTurned() {
+        let pose = CameraPose(position: Vec3(0, 0, 0), toCamera: CameraPose.turn(Vec3(0, -.pi / 2, 0)), lens: iPhone)
+
+        #expect(isClose(pose.pixel(of: Vec3(100, 0, 0)), to: Vec2(960, 540)))
+    }
+
+    @Test("the middle pixel looks straight out of the lens")
+    func middlePixel() {
+        #expect(isClose(lookingAhead().ray(Vec2(960, 540)), to: Vec3(0, 0, 1)))
+    }
+
+    @Test("a pixel one zoom-length right of the middle looks 45 degrees right")
+    func fortyFiveDegrees() {
+        let half = 0.5.squareRoot()
+
+        #expect(isClose(lookingAhead().ray(Vec2(960 + 1470.2, 540)), to: Vec3(half, 0, half)))
+    }
+
+    @Test("a direction is always 1 inch long")
+    func directionLength() {
+        #expect(abs(simd_length(nov16().ray(Vec2(100, 900))) - 1) <= 1e-12)
+    }
+
+    @Test("the line through a spot's pixel points right at the spot")
+    func lineHitsSpot() {
+        let pose = nov16(), spot = Vec3(100, 60, 3)
+
+        #expect(isClose(pose.ray(pose.pixel(of: spot)), to: simd_normalize(spot - pose.position)))
+    }
+
+    @Test("a spot on the floor is found from its pixel")
+    func floorSpot() {
+        #expect(isClose(found(Vec3(100, 60, 0), readAt: 0), to: Vec3(100, 60, 0)))
+    }
+
+    @Test("a puck's middle 0.75 in up is found from its pixel")
+    func puckHeight() {
+        #expect(isClose(found(Vec3(100, 60, 0.75), readAt: 0.75), to: Vec3(100, 60, 0.75)))
+    }
+
+    @Test("a spot 40 in up is found from its pixel")
+    func spotInTheAir() {
+        #expect(isClose(found(Vec3(30, 10, 40), readAt: 40), to: Vec3(30, 10, 40)))
+    }
+
+    @Test("a spot 3 in up read at floor height lands farther from the phone")
+    func wrongHeight() {
+        #expect(isClose(found(Vec3(100, 60, 3), readAt: 0), to: Vec3(91.64, 57.18, 0), within: 0.01))
+    }
+
+    @Test("perfect corners from the Nov 16 spot give an exact first guess")
+    func firstGuessNov16() {
+        #expect(isClose(CameraPose.firstGuess(corners(of: nov16()), iPhone)?.position, to: nov16Spot, within: 1e-6))
+    }
+
+    @Test("perfect corners from the other side give an exact first guess")
+    func firstGuessOtherSide() {
+        let otherSide = phone(at: Vec3(-190, 115, 61.5))
+
+        #expect(isClose(CameraPose.firstGuess(corners(of: otherSide), iPhone)?.position, to: otherSide.position, within: 1e-6))
+    }
+
+    @Test("corners 1 pixel off give a first guess within 2 in")
+    func firstGuessNudged() {
+        #expect(isClose(CameraPose.firstGuess(nudged(corners(of: nov16()), by: 1), iPhone)?.position, to: nov16Spot, within: 2))
+    }
+
+    @Test("4 corners in a line give no first guess")
+    func firstGuessInALine() {
+        #expect(CameraPose.firstGuess(inALine, iPhone) == nil)
+    }
+
+    @Test("4 corners on one spot give no first guess")
+    func firstGuessOneSpot() {
+        #expect(CameraPose.firstGuess(oneSpot, iPhone) == nil)
+    }
+
+    @Test("the Nov 16 phone spot is found")
+    func findsNov16Spot() {
+        #expect(isFound(nov16()))
+    }
+
+    @Test("a phone 20 ft straight in front of the net is found")
+    func findsFrontSpot() {
+        #expect(isFound(phone(at: Vec3(36, 240, 48))))
+    }
+
+    @Test("the tester spot, 25 ft to the side and 8 ft up, is found")
+    func findsTesterSpot() {
+        #expect(isFound(phone(at: Vec3(335, 110.5, 96))))
+    }
+
+    @Test("a tripod 2 ft off the ground is found")
+    func findsLowTripod() {
+        #expect(isFound(phone(at: Vec3(-100, 200, 24))))
+    }
+
+    @Test("a phone 8 ft from the net is found")
+    func findsCloseSpot() {
+        #expect(isFound(phone(at: Vec3(36, 96, 40))))
+    }
+
+    @Test("a phone 40 ft from the net is found")
+    func findsFarSpot() {
+        #expect(isFound(phone(at: Vec3(36, 480, 48))))
+    }
+
+    @Test("a phone on the other side of the net is found")
+    func findsOtherSide() {
+        #expect(isFound(phone(at: Vec3(-190, 115, 61.5))))
+    }
+
+    @Test("a phone nearly in line with the goal line is found")
+    func findsSharpAngle() {
+        #expect(isFound(phone(at: Vec3(336, 24, 60))))
+    }
+
+    @Test("a phone level with the middle of the net is found")
+    func findsLevelPhone() {
+        #expect(isFound(phone(at: Vec3(263, 115, 24))))
+    }
+
+    @Test("a phone 4 in off the ground is found")
+    func findsPhoneOnTheGround() {
+        #expect(isFound(phone(at: Vec3(263, 115, 4))))
+    }
+
+    @Test("a tripod tilted 5 degrees is found")
+    func findsTiltedTripod() {
+        #expect(isFound(phone(at: nov16Spot, tilt: 5)))
+    }
+
+    @Test("a net near the side of the picture is found")
+    func findsOffCenterNet() {
+        #expect(isFound(phone(at: Vec3(36, 240, 48), aim: Vec3(-30, 0, 40))))
+    }
+
+    @Test("a phone with a different lens is found")
+    func findsOtherLens() {
+        #expect(isFound(phone(at: nov16Spot, lens: Lens(zoom: 2000, centerX: 1000, centerY: 560))))
+    }
+
+    @Test("corners 1 pixel off put the phone within 2 in")
+    func onePixelOff() {
+        #expect(isFound(nov16(), from: nudged(corners(of: nov16()), by: 1), within: 2))
+    }
+
+    @Test("corners 3 pixels off put the phone within 6 in")
+    func threePixelsOff() {
+        #expect(isFound(nov16(), from: nudged(corners(of: nov16()), by: 3), within: 6))
+    }
+
+    @Test("all 4 corners shifted 5 pixels the same way barely move the phone")
+    func sameShift() {
+        #expect(isFound(nov16(), from: corners(of: nov16()).map { $0 + Vec2(5, 0) }, within: 0.05))
+    }
+
+    @Test("the corner miss is near 0 for perfect corners and 0.5 pixels for corners 3 pixels off")
+    func cornerMiss() throws {
+        let perfect = try #require(CameraPose(corners: corners(of: nov16()), lens: iPhone))
+        let offBy3 = try #require(CameraPose(corners: nudged(corners(of: nov16()), by: 3), lens: iPhone))
+
+        #expect(perfect.cornerMissPx < 0.01)
+        #expect(abs(offBy3.cornerMissPx - 0.5) <= 0.01)
+    }
+
+    @Test("taps shaped like a net 4.5 ft wide give no answer")
+    func tooNarrow() {
+        #expect(CameraPose(corners: corners(of: nov16(), width: 54), lens: iPhone) == nil)
+    }
+
+    @Test("the 9 Nov 16 clips match the tape-measured distance")
+    func matchesTape() throws {
+        let distances = try nov16Taps.map { simd_distance(try #require(CameraPose(corners: $0, lens: iPhone)).position, shootingSpot) }
+
+        #expect(abs(distances.reduce(0, +) / Double(distances.count) - 247.8) <= 1)
+    }
+
+    @Test("the 9 Nov 16 clips give phone heights within 1 in of each other")
+    func steadyHeight() throws {
+        let heights = try nov16Taps.map { try #require(CameraPose(corners: $0, lens: iPhone)).position.z }
+
+        #expect(heights.max()! - heights.min()! <= 1)
+    }
+
+    @Test("all 9 Nov 16 clips are accepted")
+    func realClipsAccepted() {
+        #expect(nov16Taps.allSatisfy { CameraPose(corners: $0, lens: iPhone) != nil })
+    }
+
+    @Test("3 corners give no answer")
+    func threeCorners() {
+        #expect(CameraPose(corners: Array(corners(of: nov16()).prefix(3)), lens: iPhone) == nil)
+    }
+
+    @Test("no corners give no answer")
+    func noCorners() {
+        #expect(CameraPose(corners: [], lens: iPhone) == nil)
+    }
+
+    @Test("4 corners on one spot give no answer")
+    func cornersOnOneSpot() {
+        #expect(CameraPose(corners: oneSpot, lens: iPhone) == nil)
+    }
+
+    @Test("4 corners in a line give no answer")
+    func cornersInALine() {
+        #expect(CameraPose(corners: inALine, lens: iPhone) == nil)
+    }
+
+    @Test("2 corners on one spot give no answer")
+    func doubleTap() {
+        var taps = corners(of: nov16())
+        taps[1] = taps[0]
+
+        #expect(CameraPose(corners: taps, lens: iPhone) == nil)
+    }
+
+    @Test("an unreadable corner gives no answer")
+    func unreadableCorner() {
+        var taps = corners(of: nov16())
+        taps[2].x = .nan
+
+        #expect(CameraPose(corners: taps, lens: iPhone) == nil)
+    }
+
+    @Test("all 23 wrong tap orders give no answer")
+    func wrongOrders() {
+        let taps = corners(of: nov16())
+        let wrong = orders([0, 1, 2, 3]).filter { $0 != [0, 1, 2, 3] }
+
+        #expect(wrong.count == 23)
+        #expect(wrong.filter { CameraPose(corners: $0.map { taps[$0] }, lens: iPhone) != nil }.isEmpty)
+    }
+
+    @Test("a lens with zoom 0 gives no answer")
+    func zeroZoom() {
+        #expect(CameraPose(corners: corners(of: nov16()), lens: Lens(zoom: 0, centerX: 960, centerY: 540)) == nil)
+    }
+
+//    @Test("a straight net needs no correction")
+//    func straightNet() throws {
+//        let pose = try #require(CameraPose(corners: corners(of: nov16()), lens: iPhone))
+//
+//        #expect(isClose(pose.onFloor(lean: 0).position, to: pose.position))
+//    }
+//
+//    @Test("a net leaning back 1 degree is corrected")
+//    func leaningBack() {
+//        #expect(isCorrected(lean: 1))
+//    }
+//
+//    @Test("a net leaning forward 1 degree is corrected")
+//    func leaningForward() {
+//        #expect(isCorrected(lean: -1))
+//    }
+//
+//    @Test("a bent net leaning back 1.5 degrees is corrected")
+//    func bentNet() {
+//        #expect(isCorrected(lean: 1.5))
+//    }
+//
+//    @Test("the correction keeps the net on the same pixels")
+//    func netStaysLinedUp() throws {
+//        let taps = leanedCorners(lean: 1)
+//        let fixed = try #require(CameraPose(corners: taps, lens: iPhone)).onFloor(lean: 1)
+//
+//        #expect(zip(leanedNet(lean: 1), taps).allSatisfy { isClose(fixed.pixel(of: $0), to: $1, within: 0.01) })
+//    }
+//
+//    @Test("the correction keeps the lean and the corner miss")
+//    func keepsDetails() throws {
+//        let pose = try #require(CameraPose(corners: nudged(corners(of: nov16()), by: 3), lens: iPhone))
+//        let fixed = pose.onFloor(lean: 1)
+//
+//        #expect(fixed.netLeanDegrees == 1)
+//        #expect(fixed.cornerMissPx == pose.cornerMissPx)
+//    }
+}
+
+private let iPhone = Lens(zoom: 1470.2, centerX: 960, centerY: 540)
+private let nov16Spot = Vec3(263, 115, 61.5)
+private let shootingSpot = Vec3(36, 192, 0)
+private let inALine = (0..<4).map { Vec2(500 + 100 * Double($0), 500) }
+private let oneSpot = Array(repeating: Vec2(500, 500), count: 4)
+private let nov16Taps = [
+    [Vec2(1579.4, 538.2), Vec2(1812.8, 562.6), Vec2(1806.8, 926.0), Vec2(1575.8, 807.0)],
+    [Vec2(1583.5, 530.2), Vec2(1817.1, 554.6), Vec2(1811.0, 918.0), Vec2(1579.7, 799.0)],
+    [Vec2(1579.1, 533.1), Vec2(1812.8, 558.9), Vec2(1808.9, 921.0), Vec2(1578.2, 805.0)],
+    [Vec2(1582, 539), Vec2(1808, 560), Vec2(1806, 921), Vec2(1577, 802)],
+    [Vec2(1581.3, 536.4), Vec2(1813.7, 559.7), Vec2(1808.5, 923.0), Vec2(1578.1, 805.0)],
+    [Vec2(1581.4, 536.5), Vec2(1813.5, 560.1), Vec2(1808.5, 926.0), Vec2(1578.4, 805.0)],
+    [Vec2(1581.1, 530.3), Vec2(1812.4, 553.1), Vec2(1810.1, 918.0), Vec2(1578.7, 799.0)],
+    [Vec2(1581.2, 538.0), Vec2(1812.6, 561.5), Vec2(1807.8, 926.0), Vec2(1577.8, 807.0)],
+    [Vec2(1581.2, 538.6), Vec2(1811.9, 561.6), Vec2(1807.1, 926.0), Vec2(1579.4, 807.0)],
+]
+
+private func lookingAhead(lens: Lens = iPhone) -> CameraPose {
+    CameraPose(position: Vec3(0, 0, 0), toCamera: matrix_identity_double3x3, lens: lens)
+}
+
+private func nov16() -> CameraPose {
+    phone(at: nov16Spot)
+}
+
+private func phone(at spot: Vec3, aim: Vec3 = Vec3(36, 0, 24), tilt: Double = 0, lens: Lens = iPhone) -> CameraPose {
+    let forward = simd_normalize(aim - spot)
+    let level = simd_normalize(Vec3(-forward.y, forward.x, 0))
+    let down = simd_normalize(Vec3(0, 0, -1) + forward.z * forward)
+    let angle = tilt * .pi / 180
+    let rows = [cos(angle) * level + sin(angle) * down, cos(angle) * down - sin(angle) * level, forward]
+    return CameraPose(position: spot, toCamera: simd_double3x3(rows: rows), lens: lens)
+}
+
+private func corners(of phone: CameraPose, width: Double = 72) -> [Vec2] {
+    [Vec3(0, 0, 48), Vec3(width, 0, 48), Vec3(width, 0, 0), Vec3(0, 0, 0)].map { phone.pixel(of: $0) }
+}
+
+private func nudged(_ corners: [Vec2], by pixels: Double) -> [Vec2] {
+    zip(corners, [Vec2(pixels, 0), Vec2(0, -pixels), Vec2(-pixels, 0), Vec2(0, pixels)]).map { $0 + $1 }
+}
+
+private func found(_ spot: Vec3, readAt height: Double) -> Vec3 {
+    let pose = nov16()
+    return pose.point(at: pose.pixel(of: spot), height: height)
+}
+
+private func isFound(_ phone: CameraPose, from taps: [Vec2]? = nil, within tolerance: Double = 0.01) -> Bool {
+    guard let pose = CameraPose(corners: taps ?? corners(of: phone), lens: phone.lens) else { return false }
+    return simd_distance(pose.position, phone.position) <= tolerance
+}
+
+private func isClose(_ found: Vec3?, to answer: Vec3, within tolerance: Double = 1e-9) -> Bool {
+    guard let found else { return false }
+    return simd_distance(found, answer) <= tolerance
+}
+
+private func isClose(_ found: Vec2, to answer: Vec2, within tolerance: Double = 1e-9) -> Bool {
+    simd_distance(found, answer) <= tolerance
+}
+
+private func orders(_ items: [Int]) -> [[Int]] {
+    guard items.count > 1 else { return [items] }
+    return items.indices.flatMap { index in
+        var rest = items
+        let first = rest.remove(at: index)
+        return orders(rest).map { [first] + $0 }
     }
 }
 
-// The opening's inside corners in net coordinates: top-left, top-right, bottom-right, bottom-left.
-private let insideCorners: [SIMD3<Double>] = [SIMD3(0, 0, 48), SIMD3(72, 0, 48), SIMD3(72, 0, 0), SIMD3(0, 0, 0)]
-
-// A typical iPhone 1x camera (26 mm equivalent) filming 1920 px wide: 1920 × 26 / 36.
-private let iPhone1xZoom = 1920.0 * 26 / 36
-
-// A perfect pinhole camera at a known spot, aimed at a known point, with no tilt to the side.
-private struct PretendPhone {
-    let position: SIMD3<Double>
-    let forward: SIMD3<Double>
-    let right: SIMD3<Double>
-    let down: SIMD3<Double>
-    let lens = LensInfo(width: 1920, height: 1080, centerX: 960, centerY: 540, zoom: iPhone1xZoom)
-
-    init(at position: SIMD3<Double>, aimedAt target: SIMD3<Double>) {
-        self.position = position
-        forward = simd_normalize(target - position)
-        right = simd_normalize(simd_cross(SIMD3(0, 0, 1), forward))
-        down = simd_cross(right, forward)
-    }
-
-    // Where each point would land in this phone's picture, in pixels (y down).
-    func picture(of points: [SIMD3<Double>]) -> [CGPoint] {
-        points.map { p in
-            let d = p - position
-            let (x, y, z) = (simd_dot(d, right), simd_dot(d, down), simd_dot(d, forward))
-            return CGPoint(x: lens.centerX + lens.zoom * x / z, y: lens.centerY + lens.zoom * y / z)
-        }
-    }
-}
-
-private func degrees(between a: SIMD3<Double>, _ b: SIMD3<Double>) -> Double {
-    acos(min(1, max(-1, simd_dot(simd_normalize(a), simd_normalize(b))))) * 180 / .pi
-}
-
-// Wali's hand clicks for one clip.
-private struct ClipNet: Decodable {
-    struct Spot: Decodable { let x: Double; let y: Double }
-    struct Net: Decodable {
-        let leftTop: Spot, rightTop: Spot, rightBottom: Spot, leftBottom: Spot
-        var corners: [CGPoint] { [leftTop, rightTop, rightBottom, leftBottom].map { CGPoint(x: $0.x, y: $0.y) } }
-    }
-    let clip: String
-    let net: Net
-}
-
-private let rinkClips = URL(fileURLWithPath: #filePath)
-    .deletingLastPathComponent()
-    .deletingLastPathComponent()
-    .deletingLastPathComponent()
-    .appendingPathComponent("videos/rink-clips")
-
-private func loadAnswers(_ file: String) throws -> [ClipNet] {
-    try JSONDecoder().decode([ClipNet].self, from: Data(contentsOf: rinkClips.appendingPathComponent(file)))
-}
-
-private func loadImage(_ path: String) -> CGImage? {
-    guard let source = CGImageSourceCreateWithURL(rinkClips.appendingPathComponent(path) as CFURL, nil) else { return nil }
-    return CGImageSourceCreateImageAtIndex(source, 0, nil)
-}
+//private func leanedNet(lean: Double) -> [Vec3] {
+//    let angle = lean * .pi / 180, top = Vec3(0, -48 * sin(angle), 48 * cos(angle))
+//    return [top, top + Vec3(72, 0, 0), Vec3(72, 0, 0), Vec3(0, 0, 0)]
+//}
+//
+//private func leanedCorners(lean: Double) -> [Vec2] {
+//    leanedNet(lean: lean).map { nov16().pixel(of: $0) }
+//}
+//
+//private func isCorrected(lean: Double) -> Bool {
+//    guard let pose = CameraPose(corners: leanedCorners(lean: lean), lens: iPhone) else { return false }
+//    return simd_distance(pose.onFloor(lean: lean).position, nov16Spot) <= 0.01
+//}
