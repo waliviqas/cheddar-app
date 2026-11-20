@@ -1,12 +1,14 @@
+import CoreMotion
 import SwiftUI
 
 /*
-This screen's only job is: show a phone turning sideways, so the player turns theirs before filming,
-then let them tap the check to move on.
+This screen's only job is: show a phone turning sideways, so the player turns theirs and sets it in place, then move on
+by itself once the phone is held sideways the right way: top to the left, the way the camera films.
 */
 struct TurnPhoneView: View {
     let onContinue: () -> Void
     @Environment(\.dismiss) private var dismiss
+    @State private var sideways = SidewaysWatch()
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -23,20 +25,11 @@ struct TurnPhoneView: View {
                     .easeInOut(duration: 0.9).delay(0.6)
                 }
                 .frame(height: 200)
-                Text("Turn your phone sideways")
+                Text("Turn your phone sideways and place it in your spot")
                     .font(Theme.display(34))
                     .foregroundStyle(Theme.navy)
                     .multilineTextAlignment(.center)
                 Spacer()
-                Button(action: onContinue) {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 30, weight: .bold))
-                        .foregroundStyle(Theme.navy)
-                        .frame(width: 76, height: 76)
-                        .background(Theme.cheddar, in: Circle())
-                }
-                .accessibilityLabel("Continue")
-                .padding(.bottom, 24)
             }
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 28)
@@ -50,6 +43,40 @@ struct TurnPhoneView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .statusBarHidden()
+        .onAppear { sideways.start(onContinue) }
+        .onDisappear { sideways.stop() }
+    }
+}
+
+// Says once when the phone is held sideways with its top to the left. The motion sensor works even with rotation lock
+// on; the Simulator has none, so there it goes by the phone's turn instead.
+final class SidewaysWatch {
+    private let motion = CMMotionManager()
+    private var turns: NSObjectProtocol?
+
+    func start(_ onSideways: @escaping () -> Void) {
+        if motion.isDeviceMotionAvailable {
+            motion.deviceMotionUpdateInterval = 0.1
+            motion.startDeviceMotionUpdates(to: .main) { [weak self] data, _ in
+                guard let gravity = data?.gravity, gravity.x < -0.7 else { return }  // top of the phone pointing left
+                self?.stop()
+                onSideways()
+            }
+        } else {
+            UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+            turns = NotificationCenter.default.addObserver(forName: UIDevice.orientationDidChangeNotification, object: nil,
+                                                           queue: .main) { [weak self] _ in
+                guard UIDevice.current.orientation == .landscapeLeft else { return }
+                self?.stop()
+                onSideways()
+            }
+        }
+    }
+
+    func stop() {
+        motion.stopDeviceMotionUpdates()
+        if let turns { NotificationCenter.default.removeObserver(turns) }
+        turns = nil
     }
 }
 

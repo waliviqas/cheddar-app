@@ -3,7 +3,8 @@ import SwiftUI
 /*
 This screen's only job is: the home page and its tab bar, so the player can switch between Home, Shot Map,
 Sessions and Account. Start Session on the Home tab opens the turn-your-phone screen, and its check opens the
-camera, sideways. Closing the camera comes back here. The top of Home greets the player by name.
+camera, sideways. Closing the camera comes back here; a finished recording is logged as a session and opens on the
+Sessions tab. The top of Home greets the player by name.
 */
 enum Route: Hashable {
     case session(Session.ID)
@@ -18,9 +19,12 @@ struct HomeView: View {
     @State private var sessionsPath: [Route] = []
     @State private var turning = false
     @State private var filming = false
+    @State private var tab = Tab.home
+
+    private enum Tab { case home, shotMap, sessions, account }
 
     var body: some View {
-        TabView {
+        TabView(selection: $tab) {
             NavigationStack {
                 ZStack(alignment: .top) {
                     Theme.background.ignoresSafeArea()
@@ -38,11 +42,13 @@ struct HomeView: View {
                 .navigationTitle(player.name.map { "Welcome, \($0)" } ?? "Home")
             }
             .tabItem { Label("Home", systemImage: "house.fill") }
+            .tag(Tab.home)
 
             NavigationStack {
                 ShotMapView()
             }
             .tabItem { Label("Shot Map", systemImage: "scope") }
+            .tag(Tab.shotMap)
 
             NavigationStack(path: $sessionsPath) {
                 SessionsView()
@@ -56,11 +62,13 @@ struct HomeView: View {
                     }
             }
             .tabItem { Label("Sessions", systemImage: "list.bullet") }
+            .tag(Tab.sessions)
 
             NavigationStack {
                 SettingsView(onSignedIn: onSignedIn, onAccountDeleted: onSignedOut)
             }
             .tabItem { Label("Account", systemImage: "person.crop.circle") }
+            .tag(Tab.account)
         }
         .environment(store)
         .environment(\.speedRange, store.speedRange)
@@ -74,7 +82,12 @@ struct HomeView: View {
                 keepUpright()
                 turning = false
             }) {
-                RecordView()
+                RecordView { session in
+                    store.log(session)
+                    sessionsPath = [.session(session.id)]
+                    tab = .sessions
+                    filming = false
+                }
             }
         }
     }

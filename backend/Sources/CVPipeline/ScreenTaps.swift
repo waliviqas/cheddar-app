@@ -5,13 +5,19 @@ order ShotReader needs.
 The camera screen fills the phone by hiding a strip at the top and bottom of the 1920 × 1080 video, so a tap is moved
 past that strip and scaled up to the video's size.
 */
-enum ScreenTaps {
+public enum ScreenTaps {
     private static let video = Vec2(1920, 1080)
 
+    // The net's corners in the video, in the same order as `ordered`.
+    public static func corners(_ taps: [Vec2], screen: Vec2) -> [Vec2]? {
+        ordered(taps)?.map { pixel($0, screen: screen) }
+    }
+
     // Top-left, top-right, bottom-right, bottom-left, whatever order they were tapped in. No answer until all 4 are in.
-    static func corners(_ taps: [Vec2], screen: Vec2) -> [Vec2]? {
+    // Moving taps into the video keeps their order, so the app can draw the net with the same order on the screen.
+    public static func ordered(_ taps: [Vec2]) -> [Vec2]? {
         guard taps.count == 4 else { return nil }
-        let spots = taps.map { pixel($0, screen: screen) }.sorted { $0.y < $1.y }
+        let spots = taps.sorted { $0.y < $1.y }
         return spots[0..<2].sorted { $0.x < $1.x } + spots[2..<4].sorted { $0.x > $1.x }
     }
 

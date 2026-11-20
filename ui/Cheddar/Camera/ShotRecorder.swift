@@ -5,6 +5,7 @@ This class's only job is: run the camera in 1920 × 1080, 240fps slow motion and
 */
 final class ShotRecorder: NSObject, AVCaptureFileOutputRecordingDelegate {
     let session = AVCaptureSession()
+    private(set) var fieldOfView = 0.0  // how wide the camera sees across the video, in degrees; 0 until it's locked
     private let output = AVCaptureMovieFileOutput()
     private var finished: ((URL?) -> Void)?
 
@@ -80,6 +81,7 @@ final class ShotRecorder: NSObject, AVCaptureFileOutputRecordingDelegate {
         guard let format = fullHD.last(where: { maxRate($0) >= 240 }) else { return false }
         do { try camera.lockForConfiguration() } catch { return false }
         camera.activeFormat = format
+        fieldOfView = Double(format.videoFieldOfView)
         camera.activeVideoMinFrameDuration = CMTime(value: 1, timescale: 240)
         camera.activeVideoMaxFrameDuration = CMTime(value: 1, timescale: 240)
         camera.unlockForConfiguration()

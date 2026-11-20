@@ -86,6 +86,6 @@ public struct CameraPose {
     }
 }
 
-struct Lens {
+public struct Lens: Sendable {
     var zoom: Double, centerX: Double, centerY: Double
 }

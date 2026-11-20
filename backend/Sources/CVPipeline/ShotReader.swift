@@ -7,16 +7,18 @@ This class's only job is: read every shot in a video, from the video and the pla
 It moves the taps onto the net, places the phone, searches a strip of the picture worked out from the net,
 and keeps only readings whose dot lands on the net.
 */
-struct Shot {
-    let releaseTime: Double, mph: Double, hit: Vec2, slid: Bool
+// One shot in the video: when it left the stick, in seconds into the video, its speed, and where its middle reached the
+// net, in inches across from the left post and up from the ground.
+public struct ShotReading: Sendable {
+    public let releaseTime: Double, mph: Double, hit: Vec2, slid: Bool
 }
 
-enum ShotReader {
+public enum ShotReader {
     private static let nov16PostHeight = 316.5, maxFitMissPx = 3.0, netSideColumns = 150..<1910
     private static let shotStarts: [Double] = [96, 144, 192, 216]
 
     // No answer means the taps can't be a net.
-    static func read(_ clip: URL, taps: [Vec2], lens: Lens) async throws -> [Shot]? {
+    public static func read(_ clip: URL, taps: [Vec2], lens: Lens) async throws -> [ShotReading]? {
         var corners = taps
         if let still = try await Clip.picture(clip, at: 1.0), let better = NetCorners.refine(taps, picture: still) {
             corners = better
@@ -32,12 +34,12 @@ enum ShotReader {
         return dark.frames
     }
 
-    static func shots(in frames: [SpotFrame], pose: CameraPose, scale: Double) -> [Shot] {
+    static func shots(in frames: [SpotFrame], pose: CameraPose, scale: Double) -> [ShotReading] {
         let direction = towardNet(pose)
         return ShotFinder.flights(frames, towardNet: direction).compactMap { flight in
             guard let track = PuckTrack.exact(flight, frames: frames, towardNet: direction), let fit = ShotFit.read(track, pose: pose),
                   keeps(fit, scale: scale) else { return nil }
-            return Shot(releaseTime: fit.releaseTime, mph: fit.mph, hit: fit.hit, slid: fit.slid)
+            return ShotReading(releaseTime: fit.releaseTime, mph: fit.mph, hit: fit.hit, slid: fit.slid)
         }
     }
 

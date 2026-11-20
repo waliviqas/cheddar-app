@@ -1,25 +1,16 @@
 import SwiftUI
 
 /*
-This view's only job is: show the shot's speed, or say the shot wasn't counted.
+This view's only job is: say no shots were found in the recording, and let the player film again.
 */
 struct ResultView: View {
-    let mph: Double?
-    let onAnotherShot: () -> Void
+    let onTryAgain: () -> Void
 
     var body: some View {
         VStack(spacing: 16) {
-            if let mph {
-                Text(String(format: "%.1f", mph))
-                    .font(.system(size: 80, weight: .black, design: .rounded))
-                Text("MPH")
-                    .font(.title2.bold())
-                    .foregroundStyle(.secondary)
-            } else {
-                Text("Shot not counted")
-                    .font(.title.bold())
-            }
-            Button("Another Shot", action: onAnotherShot)
+            Text("No shots found")
+                .font(.title.bold())
+            Button("Try Again", action: onTryAgain)
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
                 .padding(.top, 8)
@@ -30,5 +21,5 @@ struct ResultView: View {
 }
 
 #Preview {
-    ResultView(mph: 88.5) {}
+    ResultView {}
 }

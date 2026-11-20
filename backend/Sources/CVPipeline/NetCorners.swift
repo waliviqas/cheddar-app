@@ -1,6 +1,6 @@
 import Foundation
 
-typealias Vec2 = SIMD2<Double>
+public typealias Vec2 = SIMD2<Double>
 
 /*
 This class's only job is: move the 4 corner taps onto the net's true inside corners.

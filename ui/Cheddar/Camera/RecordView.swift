@@ -1,21 +1,42 @@
 import SwiftUI
 
 /*
-This screen's only job is: show the camera, let the user film a shot, and reveal the speed.
+This screen's only job is: show the camera, let the player set the net's 4 corners (tap, drag, undo, then the check),
+draw the net's grid on them, film the session, and say when no shots were found. A session with shots goes back to
+the screen that opened this one.
 */
 struct RecordView: View {
-    @State private var model = RecordViewModel()
+    @State private var model: RecordViewModel
+    @State private var dragFrom: CGPoint?  // where the dragged corner was when the finger went down
     @Environment(\.dismiss) private var dismiss
+
+    private static let screen = "screen"
+
+    init(onSession: @escaping (Session) -> Void) {
+        _model = State(initialValue: RecordViewModel(onSession: onSession))
+    }
 
     var body: some View {
         ZStack {
             CameraPreview(session: model.recorder.session)
                 .ignoresSafeArea()
+            netLayer
             controls
         }
         .overlay(alignment: .topLeading) {
             closeButton
                 .padding(16)
+        }
+        .overlay(alignment: .top) {
+            if model.phase == .tapping {
+                Text(model.taps.count < 4 ? "Tap the 4 corners of the net · \(model.taps.count) of 4"
+                                          : "Drag a dot to move it, then tap the check")
+                    .font(.footnote)
+                    .padding(8)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .padding(16)
+                    .allowsHitTesting(false)
+            }
         }
         .task { await model.start() }
         .onDisappear { model.stop() }
@@ -25,28 +46,97 @@ struct RecordView: View {
     @ViewBuilder
     private var controls: some View {
         switch model.phase {
-        case .idle:
+        case .tapping:
+            cornerButtons
+        case .ready:
             recordButton
         case .recording:
             stopButton
         case .analyzing:
-            ProgressView("Clocking your shot…")
+            ProgressView("Clocking your shots…")
                 .padding(24)
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-        case .result(let mph):
-            ResultView(mph: mph) { model.reset() }
+        case .noShots:
+            ResultView { model.reset() }
         }
     }
 
-    // The big red circle that starts filming.
+    // The net's corners over the camera picture: tap to add one, drag one to move it. Once they're set, the net's grid
+    // is drawn on them. It covers the whole screen, like the picture, so a spot here lines up with the video.
+    private var netLayer: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .topLeading) {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture(coordinateSpace: .named(Self.screen)) { spot in model.tap(spot, screen: geometry.size) }
+                if model.phase != .tapping, let outline = model.outline {
+                    NetGridOverlay(corners: outline)
+                }
+                ForEach(model.taps.indices, id: \.self) { index in
+                    Circle()
+                        .fill(Theme.cheddar)
+                        .frame(width: 14, height: 14)
+                        .frame(width: 44, height: 44)  // easier to grab than the dot itself
+                        .contentShape(Rectangle())
+                        .gesture(drag(index))
+                        .position(model.taps[index])
+                }
+            }
+            .coordinateSpace(.named(Self.screen))
+        }
+        .ignoresSafeArea()
+    }
+
+    // Moves a corner with the finger without jumping it under the finger's middle.
+    private func drag(_ index: Int) -> some Gesture {
+        DragGesture(coordinateSpace: .named(Self.screen))
+            .onChanged { drag in
+                let from = dragFrom ?? model.taps[index]
+                dragFrom = from
+                model.move(index, to: CGPoint(x: from.x + drag.translation.width, y: from.y + drag.translation.height))
+            }
+            .onEnded { _ in dragFrom = nil }
+    }
+
+    // Undo takes back the last corner; the check, once all 4 are in, sets them and brings up the record button.
+    private var cornerButtons: some View {
+        VStack {
+            Spacer()
+            if !model.cameraReady {
+                cameraUnavailable
+            }
+            HStack(spacing: 24) {
+                if !model.taps.isEmpty {
+                    Button { model.undo() } label: {
+                        Image(systemName: "arrow.uturn.backward")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                            .frame(width: 40, height: 40)
+                            .background(.ultraThinMaterial, in: Circle())
+                    }
+                    .accessibilityLabel("Undo")
+                }
+                if model.taps.count == 4 {
+                    Button { model.confirmCorners() } label: {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 30, weight: .bold))
+                            .foregroundStyle(Theme.navy)
+                            .frame(width: 76, height: 76)
+                            .background(Theme.cheddar, in: Circle())
+                    }
+                    .accessibilityLabel("Done")
+                }
+            }
+            .padding(.bottom, 32)
+        }
+    }
+
+    // The big red circle that starts filming the session.
     private var recordButton: some View {
         VStack {
             Spacer()
             if !model.cameraReady {
-                Text("Camera unavailable — Cheddar needs a real iPhone with camera access")
-                    .font(.footnote)
-                    .padding(8)
-                    .background(.ultraThinMaterial, in: Capsule())
+                cameraUnavailable
             }
             Button {
                 model.record()
@@ -61,6 +151,13 @@ struct RecordView: View {
         }
     }
 
+    private var cameraUnavailable: some View {
+        Text("Camera unavailable — Cheddar needs a real iPhone with camera access")
+            .font(.footnote)
+            .padding(8)
+            .background(.ultraThinMaterial, in: Capsule())
+    }
+
     // Same close button as the shot replay.
     private var closeButton: some View {
         Button { dismiss() } label: {
@@ -72,7 +169,7 @@ struct RecordView: View {
         }
     }
 
-    // The square that stops filming and kicks off the analysis.
+    // The square that stops filming and kicks off the reading.
     private var stopButton: some View {
         VStack {
             Spacer()
@@ -90,5 +187,5 @@ struct RecordView: View {
 }
 
 #Preview {
-    RecordView()
+    RecordView { _ in }
 }
