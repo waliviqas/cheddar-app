@@ -85,9 +85,12 @@ private struct SessionRow: View {
     }
 }
 
-// What Sessions and Shot Map show before the player has recorded anything: the logo's cheese puck, hovering over
-// its shadow on a patch of ice. The shadow shrinks and fades as the puck rises. Holds still with Reduce Motion on.
+// What Sessions and Shot Map show before the player has recorded anything, or to a guest with a lock: the logo's
+// cheese puck, hovering over its shadow on a patch of ice. The shadow shrinks and fades as the puck rises. Holds still
+// with Reduce Motion on.
 struct NoSessionsYet: View {
+    var message = "No sessions yet"
+    var locked = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -108,9 +111,15 @@ struct NoSessionsYet: View {
                 }
                 .frame(width: 170, height: 150)
             }
-            Text("No sessions yet")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.7))
+            Group {
+                if locked {
+                    Label(message, systemImage: "lock.fill")
+                } else {
+                    Text(message)
+                }
+            }
+            .font(.title3.weight(.semibold))
+            .foregroundStyle(.white.opacity(0.7))
         }
     }
 }

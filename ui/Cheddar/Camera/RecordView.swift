@@ -2,8 +2,8 @@ import SwiftUI
 
 /*
 This screen's only job is: show the camera, let the player set the net's 4 corners (tap, drag, undo, then the check),
-draw the net's grid on them, film the session, and say when no shots were found. A session with shots goes back to
-the screen that opened this one.
+draw the net's grid on them, film the session, and show the result. A signed-in player's session goes back to the
+screen that opened this one; a guest sees each shot's speed here, and anyone with no shots read sees that none were found.
 */
 struct RecordView: View {
     @State private var model: RecordViewModel
@@ -12,7 +12,7 @@ struct RecordView: View {
 
     private static let screen = "screen"
 
-    init(onSession: @escaping (Session) -> Void) {
+    init(onSession: ((Session) -> Void)?) {
         _model = State(initialValue: RecordViewModel(onSession: onSession))
     }
 
@@ -56,8 +56,8 @@ struct RecordView: View {
             ProgressView("Clocking your shots…")
                 .padding(24)
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-        case .noShots:
-            ResultView { model.reset() }
+        case .result(let speeds):
+            ResultView(speeds: speeds) { model.reset() }
         }
     }
 

@@ -6,8 +6,8 @@ import SwiftUI
 
 /*
 This screen's only job is: let the player sign in with Apple or Google, so their sessions follow them to any phone,
-or continue as a guest, which keeps everything on this phone. Apple's or Google's signed note goes to Supabase,
-which makes the account. A guest can come back here from the Account tab to sign in, without the guest option.
+or continue as a guest, which gives only the speed reader and keeps nothing. Apple's or Google's signed note goes to
+Supabase, which makes the account. A guest can come back here from the home page to sign up, without the guest option.
 The logo sits where the opening animation leaves it, so the animation lands here and CHEDDAR turns into
 "Save your progress".
 */

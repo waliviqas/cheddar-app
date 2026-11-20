@@ -1,17 +1,19 @@
 import SwiftUI
 
 /*
-This screen's only job is: the home page and its tab bar, so the player can switch between Home, Shot Map,
-Sessions and Account. Start Session on the Home tab opens the turn-your-phone screen, and its check opens the
-camera, sideways. Closing the camera comes back here; a finished recording is logged as a session and opens on the
-Sessions tab. The top of Home greets the player by name.
+This screen's only job is: the home page and its tab bar, so the player can switch between Home, Shot Map, Sessions
+and Account. A guest gets only the speed reader: Shot Map and Sessions show a lock and "Sign up to save your sessions". Start
+Session on the Home tab opens the turn-your-phone screen, which opens the camera, sideways. Closing the camera comes
+back here; a signed-in player's finished recording is logged as a session and opens on the Sessions tab. The top of
+Home greets the player by name.
 */
 enum Route: Hashable {
     case session(Session.ID)
 }
 
 struct HomeView: View {
-    var onSignedIn: () -> Void = {}   // a guest signed in from the Account tab
+    var guest = false                 // only the speed reader, and nothing is kept
+    var onSignedIn: () -> Void = {}   // a guest signed up from the Account tab
     var onSignedOut: () -> Void = {}
 
     @Environment(PlayerName.self) private var player
@@ -45,27 +47,35 @@ struct HomeView: View {
             .tag(Tab.home)
 
             NavigationStack {
-                ShotMapView()
+                if guest {
+                    LockedView(title: "Shot Map")
+                } else {
+                    ShotMapView()
+                }
             }
             .tabItem { Label("Shot Map", systemImage: "scope") }
             .tag(Tab.shotMap)
 
             NavigationStack(path: $sessionsPath) {
-                SessionsView()
-                    .navigationDestination(for: Route.self) { route in
-                        switch route {
-                        case .session(let id):
-                            if let session = store.session(id) {
-                                SessionDetailView(session: session)
+                if guest {
+                    LockedView(title: "Sessions")
+                } else {
+                    SessionsView()
+                        .navigationDestination(for: Route.self) { route in
+                            switch route {
+                            case .session(let id):
+                                if let session = store.session(id) {
+                                    SessionDetailView(session: session)
+                                }
                             }
                         }
-                    }
+                }
             }
             .tabItem { Label("Sessions", systemImage: "list.bullet") }
             .tag(Tab.sessions)
 
             NavigationStack {
-                SettingsView(onSignedIn: onSignedIn, onAccountDeleted: onSignedOut)
+                SettingsView(guest: guest, onSignedIn: onSignedIn, onAccountDeleted: onSignedOut)
             }
             .tabItem { Label("Account", systemImage: "person.crop.circle") }
             .tag(Tab.account)
@@ -82,13 +92,20 @@ struct HomeView: View {
                 keepUpright()
                 turning = false
             }) {
-                RecordView { session in
-                    store.log(session)
-                    sessionsPath = [.session(session.id)]
-                    tab = .sessions
-                    filming = false
-                }
+                RecordView(onSession: keepSession)
             }
+        }
+    }
+
+    // A signed-in player's session is logged and opens on the Sessions tab. A guest's isn't kept: the camera shows its
+    // speeds instead.
+    private var keepSession: ((Session) -> Void)? {
+        guard !guest else { return nil }
+        return { session in
+            store.log(session)
+            sessionsPath = [.session(session.id)]
+            tab = .sessions
+            filming = false
         }
     }
 }

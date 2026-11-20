@@ -1,16 +1,16 @@
 import SwiftUI
 
 /*
-This screen's only job is: the Account tab. Name changes what Cheddar calls the player. A guest gets
-"Sign Up to Save Your Sessions", which opens the Apple and Google buttons; a signed-in player gets Delete My Account
-instead, which asks first and then deletes the account for good.
+This screen's only job is: the Account tab. A guest gets only "Sign Up to Save Your Sessions", which opens the Apple and
+Google buttons; a guest has no name, since nothing about a guest is kept. A signed-in player gets Name, which changes
+what Cheddar calls them, and Delete My Account, which asks first and then deletes the account for good.
 */
 struct SettingsView: View {
+    var guest = false
     let onSignedIn: () -> Void
     let onAccountDeleted: () -> Void
 
     @Environment(PlayerName.self) private var player
-    @AppStorage("guest") private var guest = false
     @State private var renaming = false
     @State private var newName = ""
     @State private var signingIn = false
@@ -22,22 +22,6 @@ struct SettingsView: View {
         ZStack(alignment: .top) {
             Theme.background.ignoresSafeArea()
             VStack(alignment: .leading, spacing: 12) {
-                Button {
-                    newName = player.name ?? ""
-                    renaming = true
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "person")
-                        Text("Name")
-                        Spacer()
-                        Text(player.name ?? "")
-                            .foregroundStyle(.white.opacity(0.6))
-                            .lineLimit(1)
-                        chevron
-                    }
-                    .foregroundStyle(.white)
-                    .accountRow()
-                }
                 if guest {
                     Button { signingIn = true } label: {
                         HStack(spacing: 12) {
@@ -50,6 +34,22 @@ struct SettingsView: View {
                         .accountRow()
                     }
                 } else {
+                    Button {
+                        newName = player.name ?? ""
+                        renaming = true
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "person")
+                            Text("Name")
+                            Spacer()
+                            Text(player.name ?? "")
+                                .foregroundStyle(.white.opacity(0.6))
+                                .lineLimit(1)
+                            chevron
+                        }
+                        .foregroundStyle(.white)
+                        .accountRow()
+                    }
                     Button { asking = true } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "trash")

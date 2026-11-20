@@ -5,17 +5,17 @@ import Observation
 
 /*
 This class's only job is: run the record screen's story — placing the net's 4 corners, filming the session, reading
-every shot in it, and handing back the session.
+every shot in it, and handing back the session. A guest's session isn't handed back; the screen shows its speeds.
 */
 @MainActor
 @Observable
 final class RecordViewModel {
-    enum Phase {
+    enum Phase: Equatable {
         case tapping    // placing the net's 4 corners
         case ready      // corners set; the record button is up
         case recording
         case analyzing
-        case noShots
+        case result([Double])  // each shot's speed, for a guest; none means no shots were found
     }
 
     private(set) var phase: Phase = .tapping
@@ -23,9 +23,9 @@ final class RecordViewModel {
     private(set) var taps: [CGPoint] = []  // where the player put the net's corners, in screen points
     private var screen = CGSize.zero
     let recorder = ShotRecorder()
-    private let onSession: (Session) -> Void
+    private let onSession: ((Session) -> Void)?  // nil for a guest
 
-    init(onSession: @escaping (Session) -> Void) {
+    init(onSession: ((Session) -> Void)?) {
         self.onSession = onSession
     }
 
@@ -91,7 +91,8 @@ final class RecordViewModel {
         recorder.stop()
     }
 
-    // Reads every shot in the recording, discards the video, and hands back the session, or says no shots were found.
+    // Reads every shot in the recording and discards the video. A signed-in player's session is handed back; a guest
+    // sees each shot's speed, and anyone with no shots read sees that none were found.
     private func analyze(_ url: URL) {
         phase = .analyzing
         Task {
@@ -105,10 +106,10 @@ final class RecordViewModel {
                 Shot(id: number + 1, mph: reading.mph, square: NetGrid.square(across: reading.hit.x, up: reading.hit.y),
                      clack: reading.releaseTime)
             }
-            if shots.isEmpty {
-                phase = .noShots
-            } else {
+            if let onSession, !shots.isEmpty {
                 onSession(Session(date: .now, shots: shots, duration: length))
+            } else {
+                phase = .result(shots.compactMap(\.mph))
             }
         }
     }

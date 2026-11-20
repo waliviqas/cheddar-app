@@ -3,14 +3,15 @@ import SwiftUI
 /*
 This file's only job is: pick the first screen. Until the player signs in with Apple or Google or continues as a
 guest, every time the app opens: the opening animation, then Let It Rip, then the login page once they press it.
-Then "What should we call you?" if they have no name yet; then the home page. A guest can sign in later from the
-Account tab and keeps the name they picked. Deleting the account goes back to Let It Rip.
+Then "What should we call you?" if they have no name yet; then the home page. A guest skips the name and gets only the
+speed reader; nothing about them is kept, so the next time the app opens they see the login page again. A guest can
+sign up from the home page. Deleting the account goes back to Let It Rip.
 Once they're in, the opening animation only plays when they come back from more than three hours away. Over Let It
 Rip it lands on the same logo, so it just swaps over and only the button fades in; over the home page it fades away.
 */
 struct AppFlow: View {
     @AppStorage("lastLeft") private var lastLeft = 0.0  // when the player last left the app, seconds since 1970
-    @AppStorage("guest") private var guest = false      // continued as a guest: everything stays on this phone
+    @State private var guest = false   // continued as a guest, until the app closes
     @Environment(\.scenePhase) private var scenePhase
     @State private var signedIn = supabase.auth.currentSession != nil
     @State private var player = PlayerName()
@@ -25,7 +26,7 @@ struct AppFlow: View {
     // Decided before the first frame, so the page underneath never flashes before the animation.
     init() {
         let defaults = UserDefaults.standard
-        let loggedIn = supabase.auth.currentSession != nil || defaults.bool(forKey: "guest")
+        let loggedIn = supabase.auth.currentSession != nil
         let away = Date().timeIntervalSince1970 - defaults.double(forKey: "lastLeft")
         _intro = State(initialValue: !loggedIn || away > Self.awayForIntro)
     }
@@ -40,12 +41,12 @@ struct AppFlow: View {
                     player.reload()
                 } onGuest: {
                     guest = true
-                    player.reload()
+                    player.forget()
                 }
-            } else if player.name == nil {
+            } else if !guest, player.name == nil {
                 NameView()
             } else {
-                HomeView {
+                HomeView(guest: guest) {
                     signedIn = true
                     guest = false
                     Task { await player.keepGuestName() }
