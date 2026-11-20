@@ -1,7 +1,7 @@
 import AVFoundation
 
 /*
-This class's only job is: run the camera in 240fps slow motion and record shots to a file.
+This class's only job is: run the camera in 1920 × 1080, 240fps slow motion and record shots to a file.
 */
 final class ShotRecorder: NSObject, AVCaptureFileOutputRecordingDelegate {
     let session = AVCaptureSession()
@@ -65,21 +65,25 @@ final class ShotRecorder: NSObject, AVCaptureFileOutputRecordingDelegate {
         if let connection = output.connection(with: .video), connection.isVideoRotationAngleSupported(0) {
             connection.videoRotationAngle = 0  // sideways, top of the phone to the left, like the rink clips
         }
-        applyFastestFrameRate(to: camera)
+        let locked = lockSlowMotion(camera)
         session.commitConfiguration()
-        return true
+        return locked
     }
 
-    // Switches the camera into its 240fps mode, or the fastest mode it has.
-    private func applyFastestFrameRate(to camera: AVCaptureDevice) {
-        let slowMotionCapable = camera.formats.filter { maxRate($0) >= 240 }
-        guard let format = slowMotionCapable.last ?? camera.formats.max(by: { maxRate($0) < maxRate($1) }) else { return }
-        let rate = min(240, maxRate(format))
-        do { try camera.lockForConfiguration() } catch { return }
+    // Switches the camera to 1920 × 1080 at 240fps, the only size and speed the shot reader works on. A phone that
+    // can't gets no camera rather than clips the reader would misread.
+    private func lockSlowMotion(_ camera: AVCaptureDevice) -> Bool {
+        let fullHD = camera.formats.filter {
+            let size = $0.formatDescription.dimensions
+            return size.width == 1920 && size.height == 1080
+        }
+        guard let format = fullHD.last(where: { maxRate($0) >= 240 }) else { return false }
+        do { try camera.lockForConfiguration() } catch { return false }
         camera.activeFormat = format
-        camera.activeVideoMinFrameDuration = CMTime(value: 1, timescale: Int32(rate))
-        camera.activeVideoMaxFrameDuration = CMTime(value: 1, timescale: Int32(rate))
+        camera.activeVideoMinFrameDuration = CMTime(value: 1, timescale: 240)
+        camera.activeVideoMaxFrameDuration = CMTime(value: 1, timescale: 240)
         camera.unlockForConfiguration()
+        return true
     }
 
     // Reads the fastest frame rate a camera mode supports.
