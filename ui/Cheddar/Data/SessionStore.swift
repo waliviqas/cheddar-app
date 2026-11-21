@@ -25,6 +25,7 @@ final class SessionStore {
         sessions.insert(session, at: 0)
         justLogged = session.id
         save()
+        Task { try? await SessionUpload.send(session) }
     }
 
     // After the account is deleted: its sessions and their videos are deleted too, from this phone and from iCloud.
