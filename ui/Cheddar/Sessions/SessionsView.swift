@@ -34,7 +34,7 @@ struct SessionsView: View {
         .toolbarBackground(.hidden, for: .navigationBar)
         .fullScreenCover(item: $watching, onDismiss: keepUpright) { session in
             if let url = session.video.flatMap(SavedVideos.url) {
-                SessionVideoView(session: session, url: url)
+                DownloadedVideo(url: url) { SessionVideoView(session: session, url: $0) }
             }
         }
     }

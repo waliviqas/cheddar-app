@@ -2,8 +2,8 @@ import CVPipeline
 import Foundation
 
 /*
-This file's only job is: say what a session and a shot are, and where the player's own videos of them are kept on
-this phone.
+This file's only job is: say what a session and a shot are, and how they're written to a file, so a signed-in player's
+sessions are still there after the app closes.
 */
 struct Shot: Identifiable {
     let id: Int
@@ -13,8 +13,8 @@ struct Shot: Identifiable {
     var clack: Double = 0    // seconds into the session video when the stick hits the puck
 }
 
-struct Session: Identifiable {
-    let id = UUID()
+struct Session: Identifiable, Codable {
+    var id = UUID()
     let date: Date
     let shots: [Shot]
     let duration: TimeInterval
@@ -25,18 +25,38 @@ struct Session: Identifiable {
     var average: Double? { speeds.isEmpty ? nil : speeds.reduce(0, +) / Double(speeds.count) }
 }
 
-// The player's own videos live in the app's private Videos folder on this phone, which other apps can't open.
-enum SavedVideos {
-    static let folder = URL.applicationSupportDirectory.appending(path: "Videos", directoryHint: .isDirectory)
+// The square is saved by its name, like "topLeft", since NetSquare comes from the shot reader.
+extension Shot: Codable {
+    private enum Keys: String, CodingKey { case id, mph, square, clip, clack }
 
-    // The saved video with that file name, or nil when it isn't on this phone.
-    static func url(_ name: String) -> URL? {
-        let url = folder.appending(path: name)
-        return FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) ? url : nil
+    init(from decoder: Decoder) throws {
+        let saved = try decoder.container(keyedBy: Keys.self)
+        id = try saved.decode(Int.self, forKey: .id)
+        mph = try saved.decodeIfPresent(Double.self, forKey: .mph)
+        square = try saved.decodeIfPresent(String.self, forKey: .square).flatMap(NetSquare.named)
+        clip = try saved.decodeIfPresent(String.self, forKey: .clip)
+        clack = try saved.decode(Double.self, forKey: .clack)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var saved = encoder.container(keyedBy: Keys.self)
+        try saved.encode(id, forKey: .id)
+        try saved.encodeIfPresent(mph, forKey: .mph)
+        try saved.encodeIfPresent(square.map { "\($0)" }, forKey: .square)
+        try saved.encodeIfPresent(clip, forKey: .clip)
+        try saved.encode(clack, forKey: .clack)
     }
 }
 
 extension NetSquare {
+    private static let all: [NetSquare] = [.topLeft, .topMiddle, .topRight, .middleLeft, .middle, .middleRight,
+                                           .bottomLeft, .bottomMiddle, .bottomRight, .post, .missed]
+
+    // The square with that saved name, like "topLeft".
+    static func named(_ name: String) -> NetSquare? {
+        all.first { "\($0)" == name }
+    }
+
     // Row and column in the 3 × 3 grid, top-left is (0, 0); nil for the post or a miss.
     var cell: (row: Int, column: Int)? {
         switch self {

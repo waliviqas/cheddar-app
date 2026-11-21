@@ -58,7 +58,9 @@ struct ShotReplayView: View {
         .fullScreenCover(isPresented: $watchingFull) {
             if let session, let fullVideo {
                 // Starts where the shot starts: the same moment this replay begins, before the stick hits the puck.
-                SessionVideoView(session: session, url: fullVideo, startAt: max(0, shot.clack - ReplayModel.shotAt))
+                DownloadedVideo(url: fullVideo) {
+                    SessionVideoView(session: session, url: $0, startAt: max(0, shot.clack - ReplayModel.shotAt))
+                }
             }
         }
     }

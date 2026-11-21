@@ -31,7 +31,7 @@ struct SessionDetailView: View {
                                 .background(Theme.cheddar, in: Capsule())
                         }
                         .fullScreenCover(isPresented: $watching, onDismiss: keepUpright) {
-                            SessionVideoView(session: session, url: video)
+                            DownloadedVideo(url: video) { SessionVideoView(session: session, url: $0) }
                         }
                     }
                     if store.justLogged == session.id {

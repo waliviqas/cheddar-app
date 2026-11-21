@@ -83,6 +83,8 @@ struct HomeView: View {
         .environment(store)
         .environment(\.speedRange, store.speedRange)
         .tint(Theme.cheddar)
+        .onAppear { store.load() }
+        .onChange(of: guest) { store.load() }  // a guest who signs up gets their own saved sessions
         .fullScreenCover(isPresented: $turning) {
             TurnPhoneView {
                 turnSideways()

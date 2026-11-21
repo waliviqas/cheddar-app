@@ -13,6 +13,7 @@ struct CheddarApp: App {
             AppFlow()
                 .preferredColorScheme(.dark)
                 .onOpenURL { GIDSignIn.sharedInstance.handle($0) }  // Google's sign-in hands back here
+                .task { await SavedVideos.findCloud() }
         }
     }
 }

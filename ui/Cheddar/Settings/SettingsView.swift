@@ -11,6 +11,7 @@ struct SettingsView: View {
     let onAccountDeleted: () -> Void
 
     @Environment(PlayerName.self) private var player
+    @Environment(SessionStore.self) private var store
     @State private var renaming = false
     @State private var newName = ""
     @State private var signingIn = false
@@ -114,6 +115,7 @@ struct SettingsView: View {
         problem = nil
         do {
             try await AccountDeletion.deleteMyAccount()
+            store.forgetEverything()
             onAccountDeleted()
         } catch {
             problem = "Couldn't delete your account. Check your connection and try again."
