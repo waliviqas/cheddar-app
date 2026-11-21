@@ -10,15 +10,29 @@ Upright, the numbers sit under the video; sideways, beside it.
 struct ShotReplayView: View {
     let shot: Shot
     let session: Session?   // the session the shot is from, so its full video can open at this shot
+
+    // A clip kept in iCloud comes back to the phone before it plays.
+    var body: some View {
+        if let clip = shot.clip.flatMap(SavedVideos.url) {
+            DownloadedVideo(url: clip) { ReplayScreen(shot: shot, session: session, clip: $0) }
+        } else {
+            ReplayScreen(shot: shot, session: session, clip: nil)
+        }
+    }
+}
+
+private struct ReplayScreen: View {
+    let shot: Shot
+    let session: Session?
     @State private var model: ReplayModel
     @State private var watchingFull = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.verticalSizeClass) private var verticalSize
 
-    init(shot: Shot, session: Session?) {
+    init(shot: Shot, session: Session?, clip: URL?) {
         self.shot = shot
         self.session = session
-        _model = State(initialValue: ReplayModel(clip: shot.clip.flatMap(SavedVideos.url)))
+        _model = State(initialValue: ReplayModel(clip: clip))
     }
 
     private var sideways: Bool { verticalSize == .compact }

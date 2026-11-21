@@ -15,13 +15,6 @@ enum SessionCopy {
             throw CocoaError(.fileWriteUnknown)
         }
         export.videoComposition = thirtyFrames
-        if #available(iOS 18, macOS 15, *) {
-            try await export.export(to: copy, as: .mov)
-        } else {
-            export.outputURL = copy
-            export.outputFileType = .mov
-            await export.export()
-            if let error = export.error { throw error }
-        }
+        try await export.saveMovie(to: copy)
     }
 }

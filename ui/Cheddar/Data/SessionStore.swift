@@ -28,9 +28,11 @@ final class SessionStore {
         Task { try? await SessionUpload.send(session) }
     }
 
-    // After the account is deleted: its sessions and their videos are deleted too, from this phone and from iCloud.
+    // After the account is deleted: its sessions, their videos and their shot clips are deleted too, from this phone
+    // and from iCloud.
     func forgetEverything() {
         sessions.compactMap(\.video).forEach(SavedVideos.delete)
+        sessions.flatMap(\.shots).compactMap(\.clip).forEach(SavedVideos.delete)
         if let file { try? FileManager.default.removeItem(at: file) }
         sessions = []
     }
