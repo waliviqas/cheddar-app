@@ -4,7 +4,7 @@ import Testing
 import simd
 @testable import CVPipeline
 
-@Suite("ShotReader")
+@Suite("ShotReader", .serialized)
 struct ShotReaderTests {
     @Test("your Nov 16 net is the size everything is compared with")
     func nov16Size() {

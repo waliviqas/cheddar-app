@@ -10,7 +10,7 @@ enum PuckTrack {
     private static let minSightings = 6, maxFrameGap = 3, maxRounds = 60
     private static let speeds = 1000.0...14000, maxRise = 0.6
     private static let framesBack = 30, framesAhead = 40
-    private static let secondsBefore = 0.12, secondsAfterStart = 0.5, secondsAfterEnd = 0.1
+    static let secondsBefore = 0.12, secondsAfterStart = 0.5, secondsAfterEnd = 0.1
 
     static func exact(_ flight: Flight, frames: [SpotFrame], towardNet direction: Double) -> [TrackPoint]? {
         guard let first = flight.points.first, let last = flight.points.last else { return nil }

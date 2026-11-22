@@ -5,8 +5,8 @@ import Observation
 
 /*
 This class's only job is: run the record screen's story — placing the net's 4 corners, filming the session, reading
-every shot in it, and handing back the session with a slow-mo clip of each shot and a small copy of its video kept.
-A guest's session isn't handed back or kept; the screen shows its speeds.
+every shot in it and saying each speed out loud, and handing back the session with a slow-mo clip of each shot and a
+small copy of its video kept. A guest's session isn't handed back or kept; the screen shows its speeds.
 */
 @MainActor
 @Observable
@@ -40,8 +40,9 @@ final class RecordViewModel {
         ScreenTaps.corners(taps.map { Vec2($0.x, $0.y) }, screen: Vec2(screen.width, screen.height))
     }
 
-    // Turns the camera on when the screen appears.
+    // Turns the camera on and readies the voice when the screen appears.
     func start() async {
+        SpeedVoice.shared.start()
         cameraReady = await recorder.start()
     }
 
@@ -106,6 +107,7 @@ final class RecordViewModel {
                 Shot(id: number + 1, mph: reading.mph, square: NetGrid.square(across: reading.hit.x, up: reading.hit.y),
                      clack: reading.releaseTime)
             }
+            SpeedVoice.shared.say(shots.compactMap(\.mph))
             if let onSession, !shots.isEmpty {
                 let id = UUID()
                 for index in shots.indices {

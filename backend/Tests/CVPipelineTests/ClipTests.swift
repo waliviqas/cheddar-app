@@ -3,7 +3,7 @@ import CoreGraphics
 import Testing
 @testable import CVPipeline
 
-@Suite("Picture")
+@Suite("Picture", .serialized)
 struct PictureTests {
     let picture = Picture(width: 2, height: 2, rgb: [
         255, 0, 0, 0, 255, 0,
@@ -34,7 +34,7 @@ struct PictureTests {
     }
 }
 
-@Suite("Clip")
+@Suite("Clip", .serialized)
 struct ClipTests {
     @Test("every frame comes back")
     func everyFrame() async throws {

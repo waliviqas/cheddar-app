@@ -14,10 +14,10 @@ This class's only job is: find when each shot happens by following the dark spot
 Everything uses each frame's own time, so dropped frames don't cut a flight.
 */
 enum ShotFinder {
-    private static let maxUnseen = 0.03, sameShotWindow = 0.3
+    static let maxUnseen = 0.03, sameShotWindow = 0.3
     private static let pathReach = 30.0, firstJumpReach = 90.0
-    private static let minSpeed = 800.0, minTravel = 600.0, minSightings = 8
-    private static let minBumpPixels = 5000, bumpTimesTypical = 10
+    static let minSpeed = 800.0, minTravel = 600.0, minSightings = 8
+    static let minBumpPixels = 5000, bumpTimesTypical = 10
 
     static func flights(_ frames: [SpotFrame], towardNet direction: Double) -> [Flight] {
         let fastParts = link(frames).compactMap { fastPart($0, towardNet: direction) }.sorted { $0[0].t < $1[0].t }
@@ -83,7 +83,7 @@ enum ShotFinder {
     }
 
     // A path with one sighting has no speed yet, so its first jump gets a wider reach.
-    private static func nearestSpot(for path: [TrackPoint], at time: Double, in spots: [Spot], _ unclaimed: [Bool]) -> Int? {
+    static func nearestSpot(for path: [TrackPoint], at time: Double, in spots: [Spot], _ unclaimed: [Bool]) -> Int? {
         let last = path[path.count - 1], elapsed = time - last.t
         var expectedX = last.x, expectedY = last.y
         var reach = firstJumpReach * max(1, (elapsed * 240).rounded())
@@ -105,7 +105,7 @@ enum ShotFinder {
         return nearest
     }
 
-    private static func travel(_ path: [TrackPoint], _ direction: Double) -> Double {
+    static func travel(_ path: [TrackPoint], _ direction: Double) -> Double {
         direction * (path[path.count - 1].x - path[0].x)
     }
 }
