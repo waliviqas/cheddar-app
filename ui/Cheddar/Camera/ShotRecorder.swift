@@ -12,6 +12,8 @@ final class ShotRecorder: NSObject, AVCaptureFileOutputRecordingDelegate, AVCapt
     private let frames = AVCaptureVideoDataOutput()
     private let frameLine = DispatchQueue(label: "cheddar.frames")
     private var live: LiveSpeeds?  // only touched on frameLine
+    private var waitingForFrame: (id: Int, done: (CVPixelBuffer?) -> Void)?  // only touched on frameLine
+    private var frameRequests = 0  // only touched on frameLine
     private var finished: ((URL?) -> Void)?
 
     // Asks permission, wires the camera, and waits until it is truly running before saying ready.
@@ -64,10 +66,32 @@ final class ShotRecorder: NSObject, AVCaptureFileOutputRecordingDelegate, AVCapt
         frameLine.async { self.live?.start(videoStart: videoStart) }
     }
 
+    // Hands the next camera frame to `done` on frameLine, for snapping the net while the player sets it up. Nil when the
+    // phone can't hand frames over or none comes within half a second.
+    func nextFrame(_ done: @escaping (CVPixelBuffer?) -> Void) {
+        let handsOverFrames = session.outputs.contains(frames)
+        frameLine.async {
+            guard handsOverFrames else { return done(nil) }
+            self.waitingForFrame?.done(nil)
+            self.frameRequests += 1
+            let id = self.frameRequests
+            self.waitingForFrame = (id, done)
+            self.frameLine.asyncAfter(deadline: .now() + 0.5) {
+                guard let waiting = self.waitingForFrame, waiting.id == id else { return }
+                self.waitingForFrame = nil
+                waiting.done(nil)
+            }
+        }
+    }
+
     // Called by the camera with each frame, on frameLine.
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        guard let live, let frame = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
-        live.frame(frame, time: CMSampleBufferGetPresentationTimeStamp(sampleBuffer).seconds)
+        guard let frame = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        if let waiting = waitingForFrame {
+            waitingForFrame = nil
+            waiting.done(frame)
+        }
+        live?.frame(frame, time: CMSampleBufferGetPresentationTimeStamp(sampleBuffer).seconds)
     }
 
     // Called by the camera when it skipped a frame because the one before was still being read.

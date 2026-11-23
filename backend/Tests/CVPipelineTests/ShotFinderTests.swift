@@ -153,6 +153,23 @@ struct ShotFinderTests {
         #expect(ShotFinder.fastPart(whole, towardNet: 1) == nil)
     }
 
+    // Any distance
+
+    @Test("from far away, with the net half size, a shot crossing 300 pixels still counts")
+    func shortShotFarAway() {
+        #expect(ShotFinder.fastPart(path(steps: Array(repeating: 37.5, count: 8)), towardNet: 1, scale: 0.5)?.count == 9)
+    }
+
+    @Test("with the net half size, 299 pixels is still too short")
+    func tooShortFarAway() {
+        #expect(ShotFinder.fastPart(path(steps: Array(repeating: 37.375, count: 8)), towardNet: 1, scale: 0.5) == nil)
+    }
+
+    @Test("at today's net size, 300 pixels is too short")
+    func tooShortToday() {
+        #expect(ShotFinder.fastPart(path(steps: Array(repeating: 37.5, count: 8)), towardNet: 1) == nil)
+    }
+
     @Test("600 pixels toward the net is far enough to be a shot")
     func farEnough() {
         let whole = path(steps: Array(repeating: 75, count: 8))

@@ -23,6 +23,9 @@ final class RecordViewModel {
     private(set) var phase: Phase = .tapping
     private(set) var cameraReady = false
     private(set) var taps: [CGPoint] = []  // where the player put the net's corners, in screen points
+    private(set) var netLocked = false  // the dots are on the net and make a real 6×4 net, so Record can come up
+    private(set) var locking = false
+    private var lockAttempts = 0
     private var screen = CGSize.zero
     private var live: LiveSpeeds?  // says each speed while filming
     let recorder = ShotRecorder()
@@ -48,28 +51,55 @@ final class RecordViewModel {
         cameraReady = await recorder.start()
     }
 
-    // Adds a corner where the player tapped, up to 4.
+    // Adds a corner where the player tapped, up to 4, and snaps all 4 onto the net once they're in.
     func tap(_ spot: CGPoint, screen: CGSize) {
         guard phase == .tapping, taps.count < 4 else { return }
         taps.append(spot)
         self.screen = screen
+        if taps.count == 4 { lockNet() }
     }
 
-    // Moves the corner the player is dragging.
+    // Moves the corner the player is dragging. The net locks again when the drag ends.
     func move(_ index: Int, to spot: CGPoint) {
         guard phase == .tapping, taps.indices.contains(index) else { return }
         taps[index] = spot
+        netLocked = false
     }
 
     // Takes back the last corner.
     func undo() {
         guard phase == .tapping, !taps.isEmpty else { return }
         taps.removeLast()
+        netLocked = false
     }
 
-    // The player's check: the corners are set, so the record button comes up.
+    // Snaps the 4 dots onto the net in a live camera frame and checks they make a real 6×4 net. Record waits until they do.
+    func lockNet() {
+        guard phase == .tapping, let corners, let lens = PhoneLens.lens(fieldOfView: recorder.fieldOfView) else { return }
+        lockAttempts += 1
+        let attempt = lockAttempts, screen = Vec2(screen.width, screen.height)
+        locking = true
+        recorder.nextFrame { frame in
+            let locked = NetCorners.lock(frame, taps: corners, lens: lens)
+            Task { @MainActor [weak self] in
+                guard let self, attempt == self.lockAttempts else { return }
+                self.locking = false
+                guard let locked else {
+                    self.netLocked = false
+                    return
+                }
+                self.taps = locked.map {
+                    let point = ScreenTaps.screenPoint(of: $0, screen: screen)
+                    return CGPoint(x: point.x, y: point.y)
+                }
+                self.netLocked = true
+            }
+        }
+    }
+
+    // The player's check: the net is locked, so the record button comes up.
     func confirmCorners() {
-        guard phase == .tapping, taps.count == 4 else { return }
+        guard phase == .tapping, taps.count == 4, netLocked else { return }
         phase = .ready
     }
 

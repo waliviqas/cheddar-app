@@ -27,4 +27,11 @@ public enum ScreenTaps {
         let hidden = (video * scale - screen) / 2
         return (tap + hidden) / scale
     }
+
+    // Where a video pixel shows on the camera screen: the reverse of `pixel`.
+    public static func screenPoint(of pixel: Vec2, screen: Vec2) -> Vec2 {
+        let scale = max(screen.x / video.x, screen.y / video.y)
+        let hidden = (video * scale - screen) / 2
+        return pixel * scale - hidden
+    }
 }

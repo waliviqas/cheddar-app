@@ -19,8 +19,11 @@ enum ShotFinder {
     static let minSpeed = 800.0, minTravel = 600.0, minSightings = 8
     static let minBumpPixels = 5000, bumpTimesTypical = 10
 
-    static func flights(_ frames: [SpotFrame], towardNet direction: Double) -> [Flight] {
-        let fastParts = link(frames).compactMap { fastPart($0, towardNet: direction) }.sorted { $0[0].t < $1[0].t }
+    // Pixel limits follow how big the net looks (scale 1 = Nov 16) and only ever loosen: a closer phone sees bigger jumps, a
+    // farther one shorter paths.
+    static func flights(_ frames: [SpotFrame], towardNet direction: Double, scale: Double = 1) -> [Flight] {
+        let fastParts = link(frames, scale: scale).compactMap { fastPart($0, towardNet: direction, scale: scale) }
+            .sorted { $0[0].t < $1[0].t }
         var shots: [[[TrackPoint]]] = []
         for part in fastParts {
             if let previous = shots.last?.last?.last, part[0].t <= previous.t + sameShotWindow {
@@ -34,14 +37,15 @@ enum ShotFinder {
         }
     }
 
-    static func link(_ frames: [SpotFrame]) -> [[TrackPoint]] {
+    static func link(_ frames: [SpotFrame], scale: Double = 1) -> [[TrackPoint]] {
         let limit = bumpLimit(in: frames)
         var following: [[TrackPoint]] = [], finished: [[TrackPoint]] = []
         for frame in frames {
             let spots = frame.changed > limit ? [] : frame.spots
             var unclaimed = [Bool](repeating: true, count: spots.count)
             for index in following.indices.sorted(by: { following[$0].count > following[$1].count }) {
-                guard let spot = nearestSpot(for: following[index], at: frame.time, in: spots, unclaimed) else { continue }
+                guard let spot = nearestSpot(for: following[index], at: frame.time, in: spots, unclaimed, grow: max(1, scale))
+                else { continue }
                 unclaimed[spot] = false
                 following[index].append(TrackPoint(t: frame.time, x: spots[spot].x, y: spots[spot].y))
             }
@@ -55,10 +59,11 @@ enum ShotFinder {
     }
 
     // The longest unbroken fast stretch of a path, if it could be a shot at the net.
-    static func fastPart(_ path: [TrackPoint], towardNet direction: Double) -> [TrackPoint]? {
+    static func fastPart(_ path: [TrackPoint], towardNet direction: Double, scale: Double = 1) -> [TrackPoint]? {
+        let shrink = min(1, scale)
         func isFast(_ step: Int) -> Bool {
             let from = path[step], to = path[step + 1]
-            return hypot(to.x - from.x, to.y - from.y) / (to.t - from.t) >= minSpeed
+            return hypot(to.x - from.x, to.y - from.y) / (to.t - from.t) >= minSpeed * shrink
         }
 
         var longest = 0..<0, step = 0
@@ -72,7 +77,7 @@ enum ShotFinder {
         guard !longest.isEmpty else { return nil }
 
         let part = Array(path[longest.lowerBound...longest.upperBound])
-        return part.count >= minSightings && travel(part, direction) >= minTravel ? part : nil
+        return part.count >= minSightings && travel(part, direction) >= minTravel * shrink ? part : nil
     }
 
     // A bumped phone changes far more pixels than this clip normally does.
@@ -83,15 +88,15 @@ enum ShotFinder {
     }
 
     // A path with one sighting has no speed yet, so its first jump gets a wider reach.
-    static func nearestSpot(for path: [TrackPoint], at time: Double, in spots: [Spot], _ unclaimed: [Bool]) -> Int? {
+    static func nearestSpot(for path: [TrackPoint], at time: Double, in spots: [Spot], _ unclaimed: [Bool], grow: Double = 1) -> Int? {
         let last = path[path.count - 1], elapsed = time - last.t
         var expectedX = last.x, expectedY = last.y
-        var reach = firstJumpReach * max(1, (elapsed * 240).rounded())
+        var reach = firstJumpReach * grow * max(1, (elapsed * 240).rounded())
         if path.count >= 2 {
             let previous = path[path.count - 2], gap = last.t - previous.t
             expectedX += (last.x - previous.x) / gap * elapsed
             expectedY += (last.y - previous.y) / gap * elapsed
-            reach = pathReach
+            reach = pathReach * grow
         }
 
         var nearest: Int?

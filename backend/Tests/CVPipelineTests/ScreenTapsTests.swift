@@ -56,6 +56,15 @@ struct ScreenTapsTests {
         expectCorners(try #require(ScreenTaps.corners(taps, screen: iPhone14Plus)), truth)
     }
 
+    @Test("a corner found in the video shows on your 14 Plus screen exactly where it sits")
+    func videoToScreen() {
+        for corner in nov16Corners {
+            let onScreen = ScreenTaps.screenPoint(of: corner, screen: iPhone14Plus)
+            #expect(simd_distance(ScreenTaps.pixel(onScreen, screen: iPhone14Plus), corner) < 1e-9)
+        }
+        #expect(simd_distance(ScreenTaps.screenPoint(of: Vec2(960, 540), screen: iPhone14Plus), Vec2(463, 214)) < 1e-9)
+    }
+
     @Test("3 taps give no corners")
     func threeTaps() {
         #expect(ScreenTaps.corners(Array(nov16Taps.prefix(3)), screen: iPhone14Plus) == nil)

@@ -29,17 +29,30 @@ struct RecordView: View {
         }
         .overlay(alignment: .top) {
             if model.phase == .tapping {
-                Text(model.taps.count < 4 ? "Tap the 4 corners of the net · \(model.taps.count) of 4"
-                                          : "Drag a dot to move it, then tap the check")
-                    .font(.footnote)
-                    .padding(8)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .padding(16)
-                    .allowsHitTesting(false)
+                VStack(spacing: 8) {
+                    Text(cornerHint)
+                        .font(.footnote)
+                        .padding(8)
+                        .background(.ultraThinMaterial, in: Capsule())
+                    Text("Whole net and your shooting spot in view")
+                        .font(.footnote)
+                        .padding(8)
+                        .background(.ultraThinMaterial, in: Capsule())
+                }
+                .padding(16)
+                .allowsHitTesting(false)
             }
         }
         .task { await model.start() }
         .onDisappear { model.stop() }
+    }
+
+    // What the player does next while setting the net.
+    private var cornerHint: String {
+        if model.taps.count < 4 { return "Tap the 4 corners of the net · \(model.taps.count) of 4" }
+        if model.locking { return "Finding the net…" }
+        if model.netLocked { return "Locked on the net · tap the check" }
+        return "Drag the red dots onto the inside corners of the posts"
     }
 
     // Picks which control to show for the moment the screen is in.
@@ -69,12 +82,12 @@ struct RecordView: View {
                 Color.clear
                     .contentShape(Rectangle())
                     .onTapGesture(coordinateSpace: .named(Self.screen)) { spot in model.tap(spot, screen: geometry.size) }
-                if model.phase != .tapping, let outline = model.outline {
+                if model.phase != .tapping || model.netLocked, let outline = model.outline {
                     NetGridOverlay(corners: outline)
                 }
                 ForEach(model.taps.indices, id: \.self) { index in
                     Circle()
-                        .fill(Theme.cheddar)
+                        .fill(model.taps.count == 4 && !model.netLocked && !model.locking ? Theme.goalRed : Theme.cheddar)
                         .frame(width: 14, height: 14)
                         .frame(width: 44, height: 44)  // easier to grab than the dot itself
                         .contentShape(Rectangle())
@@ -95,7 +108,10 @@ struct RecordView: View {
                 dragFrom = from
                 model.move(index, to: CGPoint(x: from.x + drag.translation.width, y: from.y + drag.translation.height))
             }
-            .onEnded { _ in dragFrom = nil }
+            .onEnded { _ in
+                dragFrom = nil
+                model.lockNet()
+            }
     }
 
     // Undo takes back the last corner; the check, once all 4 are in, sets them and brings up the record button.
@@ -124,6 +140,8 @@ struct RecordView: View {
                             .frame(width: 76, height: 76)
                             .background(Theme.cheddar, in: Circle())
                     }
+                    .disabled(!model.netLocked)
+                    .opacity(model.netLocked ? 1 : 0.4)
                     .accessibilityLabel("Done")
                 }
             }

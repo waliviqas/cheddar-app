@@ -128,6 +128,28 @@ struct LiveShotReaderTests {
         }
     }
 
+    // Any distance
+
+    @Test("a phone that sees the net 2× bigger: a 90 mph shot from 8 ft is said live at the same speed as after Stop, and today's limits miss it")
+    func closePhone() throws {
+        let run = try filmZoomed(2, aim: Vec3(36, 48, 8)) {
+            puckSpots(mph: 90, aim: lowShot, release: 1, from: Vec3(36, 96, 0.75), camera: $0)
+        }
+
+        #expect(run.today.isEmpty)
+        #expect(run.said.count == 1)
+        #expect(run.said.map(\.mph) == run.afterStop.map(\.mph))
+    }
+
+    @Test("a phone that sees the net half size: a 50 mph shot from 16 ft is said live at the same speed as after Stop, and today's limits miss it")
+    func farPhone() throws {
+        let run = try filmZoomed(0.5) { puckSpots(mph: 50, aim: lowShot, release: 1, camera: $0) }
+
+        #expect(run.today.isEmpty)
+        #expect(run.said.count == 1)
+        #expect(run.said.map(\.mph) == run.afterStop.map(\.mph))
+    }
+
     // Starting from the net frame
 
     @Test("when the posts can't be found, the live reader starts anyway with the taps as tapped")
@@ -393,17 +415,18 @@ private let lane: (rows: Range<Int>, columns: Range<Int>) = {
     return (max(0, Int(ys.min()!) - 30)..<min(1080, Int(ys.max()!) + 31), max(0, Int(xs.min()!) - 30)..<min(1920, Int(xs.max()!) + 31))
 }()
 
-private func phone(at spot: Vec3 = Vec3(263, 115, 61.5), aim: Vec3 = Vec3(36, 60, 20)) -> CameraPose {
+private func phone(at spot: Vec3 = Vec3(263, 115, 61.5), aim: Vec3 = Vec3(36, 60, 20), lens: Lens = iPhone) -> CameraPose {
     let forward = simd_normalize(aim - spot)
     let level = simd_normalize(Vec3(-forward.y, forward.x, 0))
     let down = simd_normalize(Vec3(0, 0, -1) + forward.z * forward)
-    return CameraPose(position: spot, toCamera: simd_double3x3(rows: [level, down, forward]), lens: iPhone)
+    return CameraPose(position: spot, toCamera: simd_double3x3(rows: [level, down, forward]), lens: lens)
 }
 
 // Where the phone sees a made-up shot from 16 ft out, frame by frame (the same flight as the ShotReader tests).
-private func puckSpots(mph: Double, aim: Vec3, release: Double) -> [Sighting] {
-    let step = 1e-5, camera = phone()
-    var spot = Vec3(36, 192, 0.75), velocity = simd_normalize(aim) * mph * 17.6, time = 0.0, frame = 2
+private func puckSpots(mph: Double, aim: Vec3, release: Double, from start: Vec3 = Vec3(36, 192, 0.75),
+                       camera: CameraPose = phone()) -> [Sighting] {
+    let step = 1e-5
+    var spot = start, velocity = simd_normalize(aim) * mph * 17.6, time = 0.0, frame = 2
     var spots: [Sighting] = []
     while spot.y > -6 && time < 1 {
         if time >= Double(frame) / 240 {
@@ -463,9 +486,11 @@ private func film(_ shots: [[Sighting]], frames: [Range<Int>], dropped: Set<Int>
 // One 1920×1080 picture, repainted where the puck was and is, so each new frame costs a few hundred pixels.
 private final class Camera {
     let frame: CVPixelBuffer
+    private let size: Int  // the puck's width and height in pixels
     private var drawn: [(x: Int, y: Int)] = []
 
-    init() throws {
+    init(size: Int = 12) throws {
+        self.size = size
         var made: CVPixelBuffer?
         CVPixelBufferCreate(nil, 1920, 1080, kCVPixelFormatType_32BGRA, nil, &made)
         frame = try #require(made)
@@ -478,18 +503,57 @@ private final class Camera {
         CVPixelBufferLockBaseAddress(frame, [])
         defer { CVPixelBufferUnlockBaseAddress(frame, []) }
         for corner in drawn { paint(corner, 170) }
-        drawn = spots.map { (Int($0.x.rounded()) - 6, Int($0.y.rounded()) - 6) }
+        drawn = spots.map { (Int($0.x.rounded()) - size / 2, Int($0.y.rounded()) - size / 2) }
         for corner in drawn { paint(corner, 20) }
     }
 
     private func paint(_ corner: (x: Int, y: Int), _ value: UInt8) {
         let pixels = CVPixelBufferGetBaseAddress(frame)!.assumingMemoryBound(to: UInt8.self)
         let rowLength = CVPixelBufferGetBytesPerRow(frame)
-        for y in max(corner.y, 0)..<min(corner.y + 12, 1080) {
-            for x in max(corner.x, 0)..<min(corner.x + 12, 1920) {
+        for y in max(corner.y, 0)..<min(corner.y + size, 1080) {
+            for x in max(corner.x, 0)..<min(corner.x + size, 1920) {
                 memset(pixels + y * rowLength + x * 4, Int32(value), 3)
             }
         }
+    }
+}
+
+// Films one pretend shot through a lens that makes the net look `zoom` times as big as on Nov 16, with the puck drawn to
+// match, then reads it live, after Stop, and after Stop with today's fixed pixel limits.
+private func filmZoomed(_ zoom: Double, aim: Vec3 = Vec3(36, 60, 20), shot: (CameraPose) -> [Sighting]) throws
+    -> (said: [ShotReading], afterStop: [ShotReading], today: [ShotReading]) {
+    let pose = phone(aim: aim, lens: Lens(zoom: 1470.2 * zoom, centerX: 960, centerY: 540))
+    let spots = shot(pose)
+    let xs = spots.map(\.spot.x), ys = spots.map(\.spot.y)
+    try #require(xs.allSatisfy { (20...1900).contains($0) } && ys.allSatisfy { (20...1060).contains($0) })
+    let pad = 30 * max(1, zoom)
+    let rows = max(0, Int(ys.min()! - pad))..<min(1080, Int(ys.max()! + pad) + 1)
+    let columns = max(0, Int(xs.min()! - pad))..<min(1920, Int(xs.max()! + pad) + 1)
+    var byFrame: [Int: [Vec2]] = [:]
+    for (t, spot) in spots { byFrame[Int((t * 240).rounded()), default: []].append(spot) }
+    let camera = try Camera(size: Int((12 * zoom).rounded()))
+    var reader = LiveShotReader(lane: (rows, columns), pose: pose, scale: zoom)
+    var following = FastFramesBack(rows: rows, columns: columns, scale: zoom), fixed = FastFramesBack(rows: rows, columns: columns)
+    var followingFrames: [SpotFrame] = [], fixedFrames: [SpotFrame] = [], said: [ShotReading] = []
+    for index in (byFrame.keys.min()! - 48)...(byFrame.keys.max()! + 120) {
+        let time = Double(index) / 240
+        camera.show(byFrame[index] ?? [])
+        CVPixelBufferLockBaseAddress(camera.frame, .readOnly)
+        if let spotFrame = following.add(camera.frame, time: time) { followingFrames.append(spotFrame) }
+        if let spotFrame = fixed.add(camera.frame, time: time) { fixedFrames.append(spotFrame) }
+        CVPixelBufferUnlockBaseAddress(camera.frame, .readOnly)
+        said += reader.feed(camera.frame, time: time)
+    }
+    return (said, ShotReader.shots(in: followingFrames, pose: pose, scale: zoom), todaysShots(fixedFrames, pose: pose, scale: zoom))
+}
+
+// The after-Stop read with today's fixed pixel limits, where only the fit limit grows with the net.
+private func todaysShots(_ frames: [SpotFrame], pose: CameraPose, scale: Double) -> [ShotReading] {
+    let direction = ShotReader.towardNet(pose)
+    return ShotFinder.flights(frames, towardNet: direction).compactMap { flight in
+        guard let track = PuckTrack.exact(flight, frames: frames, towardNet: direction), let fit = ShotFit.read(track, pose: pose),
+              ShotReader.keeps(fit, scale: scale) else { return nil }
+        return ShotReading(releaseTime: fit.releaseTime, mph: fit.mph, hit: fit.hit, slid: fit.slid)
     }
 }
 

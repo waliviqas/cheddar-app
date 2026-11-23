@@ -118,6 +118,40 @@ struct ClipTests {
         #expect(try await frameTimes(video).count == 5)
     }
 
+    // Rough clocks
+
+    @Test("a 240 fps video saved with a rough 1/600 s clock comes back with every frame exactly one frame after the last")
+    func roughClock() async throws {
+        let ticks = (0..<24).map { Int((Double($0) * 2.5).rounded()) }
+        let times = try await frameTimes(try makeVideo(frames: blankFrames(24), fps: 600, ticks: ticks))
+
+        #expect(times.count == 24)
+        for (index, step) in zip(times.indices.dropFirst(), zip(times.dropFirst(), times).map { $0 - $1 }) {
+            #expect(abs(step - 1.0 / 240) < 0.00001, "frame \(index), step \(step)")
+        }
+        for (index, time) in times.enumerated() {
+            #expect(abs(time - Double(index) / 240) < 0.001, "frame \(index) at \(time)")
+        }
+    }
+
+    @Test("a frame missing from a rough-clock video keeps its 2-frame gap")
+    func roughClockDroppedFrame() async throws {
+        let filmed = (0..<24).filter { $0 != 10 }
+        let ticks = filmed.map { Int((Double($0) * 2.5).rounded()) }
+        let times = try await frameTimes(try makeVideo(frames: blankFrames(23), fps: 600, ticks: ticks))
+
+        #expect(times.count == 23)
+        #expect(abs((times[10] - times[9]) - 2.0 / 240) < 0.00001)
+    }
+
+    @Test("a video with the Camera app's fine 1/2400 s clock comes back with its times untouched")
+    func fineClock() async throws {
+        let ticks = (0..<24).map { $0 * 10 }
+        let times = try await frameTimes(try makeVideo(frames: blankFrames(24), fps: 2400, ticks: ticks))
+
+        #expect(times == ticks.map { Double($0) / 2400 })
+    }
+
     @Test("frames arrive in time order")
     func timeOrder() async throws {
         let video = try makeVideo(frames: blankFrames(5), fps: 240)

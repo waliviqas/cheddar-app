@@ -12,15 +12,16 @@ enum PuckTrack {
     private static let framesBack = 30, framesAhead = 40
     static let secondsBefore = 0.12, secondsAfterStart = 0.5, secondsAfterEnd = 0.1
 
-    static func exact(_ flight: Flight, frames: [SpotFrame], towardNet direction: Double) -> [TrackPoint]? {
+    // Pixel limits follow how big the net looks (scale 1 = Nov 16) and only ever loosen, like the fit limit.
+    static func exact(_ flight: Flight, frames: [SpotFrame], towardNet direction: Double, scale: Double = 1) -> [TrackPoint]? {
         guard let first = flight.points.first, let last = flight.points.last else { return nil }
         let end = max(first.t + secondsAfterStart, last.t + secondsAfterEnd)
         let nearby = frames.filter { $0.time >= first.t - secondsBefore && $0.time <= end }
 
-        guard var points = straightestLine(nearby, towardNet: direction) else { return nil }
+        guard var points = straightestLine(nearby, towardNet: direction, scale: scale) else { return nil }
         for _ in 0..<maxRounds {
             guard points.count >= minSightings else { return nil }
-            let next = smoothRun(around: points, nearby)
+            let next = smoothRun(around: points, nearby, scale: scale)
             if next.map(\.t) == points.map(\.t), next.map(\.x) == points.map(\.x) { return next }
             points = next
         }
@@ -28,7 +29,8 @@ enum PuckTrack {
     }
 
     // Tries pairs of spots a few frames apart and keeps the fast line that passes closest to the most spots.
-    static func straightestLine(_ frames: [SpotFrame], towardNet direction: Double) -> [TrackPoint]? {
+    static func straightestLine(_ frames: [SpotFrame], towardNet direction: Double, scale: Double = 1) -> [TrackPoint]? {
+        let fast = (speeds.lowerBound * min(1, scale))...(speeds.upperBound * max(1, scale)), reach = lineReach * max(1, scale)
         var best: [TrackPoint] = [], bestScore = 0.0
         for (index, frame) in frames.enumerated() {
             for start in frame.spots {
@@ -36,9 +38,9 @@ enum PuckTrack {
                     let later = frames[index + gap], elapsed = later.time - frame.time
                     for end in later.spots {
                         let speedX = (end.x - start.x) / elapsed, speedY = (end.y - start.y) / elapsed
-                        guard direction * speedX > 0, speeds.contains(hypot(speedX, speedY)),
+                        guard direction * speedX > 0, fast.contains(hypot(speedX, speedY)),
                               abs(speedY) < maxRise * abs(speedX) else { continue }
-                        let line = spotsOnLine(from: start, frameIndex: index, speedX, speedY, frames)
+                        let line = spotsOnLine(from: start, frameIndex: index, speedX, speedY, frames, reach: reach)
                         if line.score > bestScore {
                             bestScore = line.score
                             best = line.points
@@ -51,7 +53,7 @@ enum PuckTrack {
     }
 
     // Fits a curve through the points, then keeps the spots on it, looking a few frames past each end.
-    static func smoothRun(around points: [TrackPoint], _ frames: [SpotFrame]) -> [TrackPoint] {
+    static func smoothRun(around points: [TrackPoint], _ frames: [SpotFrame], scale: Double = 1) -> [TrackPoint] {
         let middle = points[points.count / 2].t
         let times = points.map { $0.t - middle }
         let curveX = Solver.polyfit(times, points.map(\.x), degree: 2)
@@ -62,7 +64,7 @@ enum PuckTrack {
         var near: [TrackPoint] = []
         for frame in frames[max(0, firstFrame - maxFrameGap)...min(frames.count - 1, lastFrame + maxFrameGap)] {
             let x = Solver.polyval(curveX, frame.time - middle), y = Solver.polyval(curveY, frame.time - middle)
-            guard let nearest = nearestSpot(in: frame, toX: x, y: y), nearest.distance < curveReach else { continue }
+            guard let nearest = nearestSpot(in: frame, toX: x, y: y), nearest.distance < curveReach * max(1, scale) else { continue }
             near.append(TrackPoint(t: frame.time, x: nearest.spot.x, y: nearest.spot.y))
         }
         return longestRun(near, frames)
@@ -84,14 +86,14 @@ enum PuckTrack {
 
     // A spot right on the line scores 1, and one at the edge of its reach scores half that.
     private static func spotsOnLine(from start: Spot, frameIndex index: Int, _ speedX: Double, _ speedY: Double,
-                                    _ frames: [SpotFrame]) -> (points: [TrackPoint], score: Double) {
+                                    _ frames: [SpotFrame], reach: Double = lineReach) -> (points: [TrackPoint], score: Double) {
         var points: [TrackPoint] = [], score = 0.0
         for frame in frames[max(0, index - framesBack)..<min(frames.count, index + framesAhead)] {
             let elapsed = frame.time - frames[index].time
             guard let nearest = nearestSpot(in: frame, toX: start.x + speedX * elapsed, y: start.y + speedY * elapsed),
-                  nearest.distance < lineReach else { continue }
+                  nearest.distance < reach else { continue }
             points.append(TrackPoint(t: frame.time, x: nearest.spot.x, y: nearest.spot.y))
-            score += 1 - nearest.distance / lineReach * 0.5
+            score += 1 - nearest.distance / reach * 0.5
         }
         return (points, score)
     }

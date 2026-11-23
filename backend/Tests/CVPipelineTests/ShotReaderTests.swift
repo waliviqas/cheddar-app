@@ -202,7 +202,7 @@ struct ShotReaderTests {
         #expect(frames.allSatisfy { $0.spots.isEmpty })
     }
 
-    @Test("your 9 Nov 16 clips read 19 of 20 shots with no extras and an average miss of 2.68 mph or better",
+    @Test("your 9 Nov 16 clips read 19 of 20 shots with no extras, an average miss of 2.68 mph or better, and today's speeds within 0.02 mph",
           .enabled(if: realVideosRequested))
     func nov16Clips() async throws {
         let clips = try JSONDecoder().decode([TappedClip].self, from: Data(contentsOf: rinkClips.appendingPathComponent("1x-measured-nov16/net-corners.json")))
@@ -211,6 +211,11 @@ struct ShotReaderTests {
             let name = URL(fileURLWithPath: clip.clip).deletingPathExtension().lastPathComponent
             let read = try await ShotReader.read(rinkClips.appendingPathComponent(clip.clip), taps: clip.net.taps, lens: iPhone)
             let shots = try #require(read)
+            let today = try #require(nov16Today[name])
+            #expect(shots.count == today.count, "\(name)")
+            for (now, before) in zip(shots.map(\.mph), today) {
+                #expect(abs(now - before) <= 0.02, "\(name): \(now) now, \(before) today")
+            }
             var matched = Set<Int>()
             for known in radarShots where known.clip == name {
                 guard let i = shots.indices.first(where: { !matched.contains($0) && abs(shots[$0].releaseTime - known.start) < 0.3 }) else { continue }
@@ -248,6 +253,18 @@ private let lowShot = Vec3(-6, -192, 16)
 private let realVideosRequested = ProcessInfo.processInfo.environment["CHEDDAR_REAL_VIDEOS"] == "1"
 private let rinkClips = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
     .deletingLastPathComponent().appendingPathComponent("videos/rink-clips")
+// Each clip's speeds as the reader read them before distance-following (Nov 22 repo reader).
+private let nov16Today: [String: [Double]] = [
+    "62mph-55mph": [54.9538, 55.0253],
+    "61mph-57mph-63mph": [61.8260, 57.4705, 61.3831],
+    "50mph-36mph-59mph": [50.4637, 36.6752, 62.0966],
+    "30mph-25mph": [19.1575],
+    "67mph-63mph": [64.8272, 63.7929],
+    "63mph-62mph": [62.0447, 67.0831],
+    "62mph-72mph": [63.9358, 66.2195],
+    "74mph-62mph": [65.9284, 62.3322],
+    "54mph-65mph": [58.9005, 65.7850],
+]
 private let radarShots: [(clip: String, radar: Double, start: Double)] = [
     ("62mph-55mph", 62, 15.94), ("62mph-55mph", 55, 20.67), ("61mph-57mph-63mph", 61, 10.26), ("61mph-57mph-63mph", 57, 17.85),
     ("61mph-57mph-63mph", 63, 23.84), ("50mph-36mph-59mph", 50, 12.05), ("50mph-36mph-59mph", 36, 17.41), ("50mph-36mph-59mph", 59, 21.52),

@@ -176,6 +176,20 @@ struct TwoFramesBackTests {
         #expect(spots.first?.size == 1500)
     }
 
+    // Any distance
+
+    @Test("a phone closer to the net, which sees it 1.4× bigger, finds a 2,940-pixel puck, and 2,941 is too big")
+    func biggerPuckUpClose() throws {
+        #expect(try spotFrames(9, blockOfPixels(2940, width: 60), scale: 1.4)[0].spots.map(\.size) == [2940])
+        #expect(try spotFrames(9, blockOfPixels(2941, width: 60), scale: 1.4)[0].spots.isEmpty)
+    }
+
+    @Test("a phone farther away, which sees the net half size, finds a 10-pixel puck that today's limits miss")
+    func smallerPuckFarAway() throws {
+        #expect(try spotFrames(9, blockOfPixels(10, width: 5), scale: 0.5)[0].spots.map(\.size) == [10])
+        #expect(try spotFrames(9, blockOfPixels(10, width: 5))[0].spots.isEmpty)
+    }
+
     @Test("a spot of 1,501 pixels is too big to be a puck")
     func tooBig() throws {
         #expect(try spotFrames(9, blockOfPixels(1501, width: 50))[0].spots.isEmpty)
@@ -247,8 +261,8 @@ private let blue = Pixel(blue: 255, green: 20, red: 20)
 private let white = Pixel(blue: 255, green: 255, red: 255)
 
 private func spotFrames(_ count: Int, _ draw: (Int) throws -> CVPixelBuffer,
-                        rows: Range<Int> = 0..<64, columns: Range<Int> = 0..<320) throws -> [SpotFrame] {
-    var finder = TwoFramesBack(rows: rows, columns: columns)
+                        rows: Range<Int> = 0..<64, columns: Range<Int> = 0..<320, scale: Double = 1) throws -> [SpotFrame] {
+    var finder = TwoFramesBack(rows: rows, columns: columns, scale: scale)
     for index in 0..<count {
         let frame = try draw(index)
         CVPixelBufferLockBaseAddress(frame, .readOnly)

@@ -186,6 +186,20 @@ struct FastFramesBackTests {
         #expect(try spotFrames(9, blockOfPixels(20, width: 5)).firstResult.spots.map(\.size) == [20])
     }
 
+    // Any distance
+
+    @Test("1.4× closer: a 2,940-pixel puck is found and 2,941 is too big, the same as TwoFramesBack")
+    func biggerPuckUpClose() throws {
+        #expect(try spotFrames(9, blockOfPixels(2940, width: 60), scale: 1.4).firstResult.spots.map(\.size) == [2940])
+        #expect(try spotFrames(9, blockOfPixels(2941, width: 60), scale: 1.4).firstResult.spots.isEmpty)
+    }
+
+    @Test("half size: a 10-pixel puck is found, the same as TwoFramesBack")
+    func smallerPuckFarAway() throws {
+        #expect(try spotFrames(9, blockOfPixels(10, width: 5), scale: 0.5).firstResult.spots.map(\.size) == [10])
+        #expect(try spotFrames(9, blockOfPixels(10, width: 5)).firstResult.spots.isEmpty)
+    }
+
     @Test("a spot of 1,500 pixels is found, and 1,501 is too big")
     func biggestSize() throws {
         #expect(try spotFrames(9, blockOfPixels(1500, width: 50)).firstResult.spots.map(\.size) == [1500])
@@ -351,8 +365,8 @@ private struct TappedClip: Decodable {
 }
 
 private func spotFrames(_ count: Int, _ draw: (Int) throws -> CVPixelBuffer,
-                        rows: Range<Int> = 0..<64, columns: Range<Int> = 0..<320) throws -> [SpotFrame] {
-    var finder = FastFramesBack(rows: rows, columns: columns)
+                        rows: Range<Int> = 0..<64, columns: Range<Int> = 0..<320, scale: Double = 1) throws -> [SpotFrame] {
+    var finder = FastFramesBack(rows: rows, columns: columns, scale: scale)
     var results: [SpotFrame] = []
     for index in 0..<count {
         let frame = try draw(index)

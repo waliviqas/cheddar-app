@@ -90,7 +90,8 @@ struct ShotLogic {
     private mutating func follow(_ spots: [Spot], at time: Double) {
         var unclaimed = [Bool](repeating: true, count: spots.count)
         for index in following.indices.sorted(by: { following[$0].count > following[$1].count }) {
-            guard let spot = ShotFinder.nearestSpot(for: following[index], at: time, in: spots, unclaimed) else { continue }
+            guard let spot = ShotFinder.nearestSpot(for: following[index], at: time, in: spots, unclaimed, grow: max(1, scale))
+            else { continue }
             unclaimed[spot] = false
             following[index].append(TrackPoint(t: time, x: spots[spot].x, y: spots[spot].y))
         }
@@ -101,7 +102,7 @@ struct ShotLogic {
         }
         for path in done {
             // A piece starting inside a shot that's already decided can't change it any more.
-            guard let part = ShotFinder.fastPart(path, towardNet: direction), part[0].t > closedUntil else { continue }
+            guard let part = ShotFinder.fastPart(path, towardNet: direction, scale: scale), part[0].t > closedUntil else { continue }
             parts.append(part)
         }
     }
@@ -129,7 +130,8 @@ struct ShotLogic {
             // A lost frame inside any piece could change which piece is chosen, so losses count from the earliest piece.
             let windowStart = pieces[0][0].t - PuckTrack.secondsBefore
             let recent = history.filter { $0.time >= trackFrom - 0.01 }
-            let fit = PuckTrack.exact(Flight(points: chosen), frames: recent, towardNet: direction).flatMap { ShotFit.read($0, pose: pose) }
+            let fit = PuckTrack.exact(Flight(points: chosen), frames: recent, towardNet: direction, scale: scale)
+                .flatMap { ShotFit.read($0, pose: pose) }
             let lost = gaps.filter { $0.to > windowStart - Self.lostReach && $0.from < frameTime }.reduce(0) { $0 + $1.lost }
             notes.append(Note(reading: fit.map { ShotReading(releaseTime: $0.releaseTime, mph: $0.mph, hit: $0.hit, slid: $0.slid) },
                               kept: fit.map { ShotReader.keeps($0, scale: scale) } ?? false,
@@ -153,7 +155,9 @@ struct ShotLogic {
                     if canStillTravel(path, from: step) { return true }
                 } else {
                     let run = Array(path[step...end])
-                    if run.count >= ShotFinder.minSightings && ShotFinder.travel(run, direction) >= ShotFinder.minTravel { return true }
+                    if run.count >= ShotFinder.minSightings && ShotFinder.travel(run, direction) >= ShotFinder.minTravel * min(1, scale) {
+                        return true
+                    }
                 }
             }
             step = end
@@ -163,7 +167,7 @@ struct ShotLogic {
 
     private func isFast(_ path: [TrackPoint], _ step: Int) -> Bool {
         let from = path[step], to = path[step + 1]
-        return hypot(to.x - from.x, to.y - from.y) / (to.t - from.t) >= ShotFinder.minSpeed
+        return hypot(to.x - from.x, to.y - from.y) / (to.t - from.t) >= ShotFinder.minSpeed * min(1, scale)
     }
 
     // Spots never leave the strip, so a path near its net-side edge can't still travel the 600 px a shot needs.
@@ -171,6 +175,6 @@ struct ShotLogic {
         let last = path.last!
         let soFar = direction * (last.x - path[start].x)
         let room = direction > 0 ? laneX.upperBound - last.x : last.x - laneX.lowerBound
-        return soFar + room >= ShotFinder.minTravel
+        return soFar + room >= ShotFinder.minTravel * min(1, scale)
     }
 }

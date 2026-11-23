@@ -25,20 +25,21 @@ public enum ShotReader {
             corners = better
         }
         guard let pose = CameraPose(corners: corners, lens: lens) else { return nil }
-        let frames = try await scan(clip, lane: lane(corners: corners, pose: pose))
+        let frames = try await scan(clip, lane: lane(corners: corners, pose: pose), scale: netScale(corners))
         return shots(in: frames, pose: pose, scale: netScale(corners))
     }
 
-    static func scan(_ clip: URL, lane: (rows: Range<Int>, columns: Range<Int>)) async throws -> [SpotFrame] {
-        var dark = TwoFramesBack(rows: lane.rows, columns: lane.columns)
+    static func scan(_ clip: URL, lane: (rows: Range<Int>, columns: Range<Int>), scale: Double = 1) async throws -> [SpotFrame] {
+        var dark = TwoFramesBack(rows: lane.rows, columns: lane.columns, scale: scale)
         try await Clip.eachFrame(clip) { buffer, time in dark.add(buffer, time: time) }
         return dark.frames
     }
 
     static func shots(in frames: [SpotFrame], pose: CameraPose, scale: Double) -> [ShotReading] {
         let direction = towardNet(pose)
-        return ShotFinder.flights(frames, towardNet: direction).compactMap { flight in
-            guard let track = PuckTrack.exact(flight, frames: frames, towardNet: direction), let fit = ShotFit.read(track, pose: pose),
+        return ShotFinder.flights(frames, towardNet: direction, scale: scale).compactMap { flight in
+            guard let track = PuckTrack.exact(flight, frames: frames, towardNet: direction, scale: scale),
+                  let fit = ShotFit.read(track, pose: pose),
                   keeps(fit, scale: scale) else { return nil }
             return ShotReading(releaseTime: fit.releaseTime, mph: fit.mph, hit: fit.hit, slid: fit.slid)
         }

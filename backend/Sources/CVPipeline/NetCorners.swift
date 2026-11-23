@@ -1,17 +1,20 @@
+import CoreVideo
 import Foundation
+import simd
 
 public typealias Vec2 = SIMD2<Double>
 
 /*
 This class's only job is: move the 4 corner taps onto the net's true inside corners.
 
-Taps land a few pixels off, so straight lines fitted to the posts and crossbar find the real corners.
-Size limits are shares of how tall a post looks, so they adjust to where the phone is.
+Taps land a few pixels off, so straight lines fitted to the posts and crossbar find the real corners, and each bottom corner
+goes where its post meets the ground. Size limits are shares of how tall a post looks, so they adjust to where the phone is.
 */
-enum NetCorners {
+public enum NetCorners {
     private static let minWidthShare = 0.015, maxWidthShare = 0.11, searchShare = 0.1
-    private static let searchBoxShare = 0.2, maxMoveShare = 0.05
+    private static let searchBoxShare = 0.2, maxMoveShare = 0.15
     private static let postCornerShare = 0.08, barCornerShare = 0.12
+    private static let footColorChange = 25.0, keptBottomTap = 6.0
 
     // x = a + b * y for posts, y = a + b * x for the crossbar.
     struct Line {
@@ -41,9 +44,11 @@ enum NetCorners {
               let bar = barBottom(mask, left: taps[0], right: taps[1], postHeight: postHeight) else { return nil }
 
         // The opening's inside edges are the left post's right edge and the right post's left edge.
-        let corners = [meet(post: left.right, bar: bar), meet(post: right.left, bar: bar),
-                       Vec2(right.left.at(taps[2].y), taps[2].y), Vec2(left.right.at(taps[3].y), taps[3].y)]
         let maxMove = postHeight * maxMoveShare
+        let rightFoot = footHeight(picture, inside: right.left, outside: right.right, tap: taps[2], reach: maxMove)
+        let leftFoot = footHeight(picture, inside: left.right, outside: left.left, tap: taps[3], reach: maxMove)
+        let corners = [meet(post: left.right, bar: bar), meet(post: right.left, bar: bar),
+                       Vec2(right.left.at(rightFoot), rightFoot), Vec2(left.right.at(leftFoot), leftFoot)]
         return zip(corners, taps).allSatisfy { hypot($0.x - $1.x, $0.y - $1.y) <= maxMove } ? corners : nil
     }
 
@@ -142,5 +147,48 @@ enum NetCorners {
 
     private static func tallestPost(_ taps: [Vec2]) -> Double {
         max(abs(taps[3].y - taps[0].y), abs(taps[2].y - taps[1].y))
+    }
+
+    // The net's corners for the reader: the taps moved onto the net, or kept as tapped when the posts can't be found. No
+    // answer means they can't be a 6×4 net, so the app keeps Record blocked.
+    static func lock(_ picture: Picture?, taps: [Vec2], lens: Lens) -> [Vec2]? {
+        let corners = picture.flatMap { refine(taps, picture: $0) } ?? taps
+        return CameraPose(corners: corners, lens: lens) == nil ? nil : corners
+    }
+
+    // The same from a camera frame, the live camera's 420 or a saved video's. With no frame, only the net check runs.
+    public static func lock(_ frame: CVPixelBuffer?, taps: [Vec2], lens: Lens) -> [Vec2]? {
+        let picture = frame.map { frame in
+            CVPixelBufferLockBaseAddress(frame, .readOnly)
+            defer { CVPixelBufferUnlockBaseAddress(frame, .readOnly) }
+            return Picture(frame: frame)
+        }
+        return lock(picture, taps: taps, lens: lens)
+    }
+
+    // Where a post meets the ground: walking down just inside its inner edge, the first row where the post's own color gives
+    // way to the ground, a goal line or anything else. A bottom tap within 6 pixels of it, or with no change found, is kept:
+    // where the net's padding wraps a post's foot, the change can come a few pixels early.
+    static func footHeight(_ picture: Picture, inside: Line, outside: Line, tap: Vec2, reach: Double) -> Double {
+        func color(at y: Int) -> SIMD3<Double>? {
+            let edge = inside.at(Double(y)), other = outside.at(Double(y))
+            let x = Int((edge + (other > edge ? 1 : -1) * max(1, 0.35 * abs(other - edge))).rounded())
+            return picture.color(x, y).map { SIMD3(Double($0.r), Double($0.g), Double($0.b)) }
+        }
+        var post: [SIMD3<Double>] = [], changed = 0
+        for y in Int((tap.y - reach).rounded())...Int((tap.y + reach).rounded()) {
+            guard let here = color(at: y) else { break }
+            if post.count >= 8, simd_distance(here, post.suffix(8).reduce(.zero, +) / 8) > footColorChange {
+                changed += 1
+                if changed == 2 {
+                    let foot = Double(y) - 1.5
+                    return abs(foot - tap.y) <= keptBottomTap ? tap.y : foot
+                }
+                continue
+            }
+            changed = 0
+            post.append(here)
+        }
+        return tap.y
     }
 }

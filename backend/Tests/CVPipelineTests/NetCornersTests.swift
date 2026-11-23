@@ -1,4 +1,6 @@
+import Foundation
 import Testing
+import simd
 @testable import CVPipeline
 
 @Suite("NetCorners")
@@ -386,12 +388,30 @@ struct NetCornersTests {
         #expect(isClose(NetCorners.refine(netTaps, picture: netPicture()), to: netCorners))
     }
 
-    @Test("the bottom corners keep the height of the bottom taps")
-    func bottomCornersKeepTapHeight() {
-        let taps = [netTaps[0], netTaps[1], Vec2(503, 403), Vec2(108, 413)]
-        let answer = [netCorners[0], netCorners[1], Vec2(499.5, 403), Vec2(111.5, 413)]
+    @Test("bottom dots 10 pixels above and below where the posts meet the ground move onto the post bottoms")
+    func bottomDotsSnapToPostBottoms() {
+        let taps = [netTaps[0], netTaps[1], Vec2(503, 397.5), Vec2(108, 417.5)]
+        let answer = [netCorners[0], netCorners[1], Vec2(499.5, 407.5), Vec2(111.5, 407.5)]
 
         #expect(isClose(NetCorners.refine(taps, picture: netPicture()), to: answer))
+    }
+
+    @Test("a bottom dot within 6 pixels of the post bottom stays where you tapped")
+    func carefulBottomDotStays() {
+        let taps = [netTaps[0], netTaps[1], Vec2(503, 413.5), Vec2(108, 401.5)]
+        let answer = [netCorners[0], netCorners[1], Vec2(499.5, 413.5), Vec2(111.5, 401.5)]
+
+        #expect(isClose(NetCorners.refine(taps, picture: netPicture()), to: answer))
+    }
+
+    @Test("a brighter red goal line under the posts doesn't pull the bottom dots down")
+    func goalLineUnderPosts() {
+        let goalLine = Paint(230, 90, 90)
+        let picture = netPicture { _, y in (408..<430).contains(y) ? goalLine : nil }
+        let taps = [netTaps[0], netTaps[1], Vec2(503, 418), Vec2(108, 418)]
+        let answer = [netCorners[0], netCorners[1], Vec2(499.5, 407.5), Vec2(111.5, 407.5)]
+
+        #expect(isClose(NetCorners.refine(taps, picture: picture), to: answer))
     }
 
     @Test("a tilted net still gets its true corners")
@@ -399,14 +419,14 @@ struct NetCornersTests {
         let tilted = paintedPicture(640, 480) { x, y in
             let across = Double(x), down = Double(y)
             let leftLean = 0.03 * (down - 100), rightLean = -0.02 * (down - 100), slope = 0.05 * (across - 100)
-            let belowBarTop = down >= 99.5 + slope && down < 440
+            let belowBarTop = down >= 99.5 + slope && down < 408
             let onLeftPost = belowBarTop && across >= 99.5 + leftLean && across <= 111.5 + leftLean
             let onRightPost = belowBarTop && across >= 499.5 + rightLean && across <= 511.5 + rightLean
             let onBar = down >= 99.5 + slope && down <= 111.5 + slope && across >= 99.5 + leftLean && across <= 511.5 + rightLean
             return onLeftPost || onRightPost || onBar ? frameRed : lightFloor
         }
         let topLeft = topCorner(postEdge: 111.5, lean: 0.03), topRight = topCorner(postEdge: 499.5, lean: -0.02)
-        let bottomRight = Vec2(499.5 - 0.02 * 308, 408), bottomLeft = Vec2(111.5 + 0.03 * 308, 408)
+        let bottomRight = Vec2(499.5 - 0.02 * 307.5, 407.5), bottomLeft = Vec2(111.5 + 0.03 * 307.5, 407.5)
         let taps = [topLeft + Vec2(-3, -3), topRight + Vec2(3, -3), bottomRight + Vec2(3, 0), bottomLeft + Vec2(-3, 0)]
 
         let corners = NetCorners.refine(taps, picture: tilted)
@@ -414,33 +434,33 @@ struct NetCornersTests {
         #expect(isClose(corners, to: [topLeft, topRight, bottomRight, bottomLeft], within: 0.1))
     }
 
-    @Test("a tap 15 pixels from the corner on a 300-pixel post is corrected")
-    func movesFifteenPixels() {
-        let taps = [Vec2(96.5, 111.5), netTaps[1], netTaps[2], netTaps[3]]
+    @Test("a tap 45 pixels from the corner on a 300-pixel post is corrected")
+    func movesFortyFivePixels() {
+        let taps = [Vec2(66.5, 111.5), netTaps[1], netTaps[2], netTaps[3]]
 
         #expect(isClose(NetCorners.refine(taps, picture: netPicture()), to: netCorners))
     }
 
-    @Test("a tap 16 pixels from the corner on a 300-pixel post gives no answer")
-    func refusesSixteenPixels() {
-        let taps = [Vec2(95.5, 111.5), netTaps[1], netTaps[2], netTaps[3]]
+    @Test("a tap 46 pixels from the corner on a 300-pixel post gives no answer")
+    func refusesFortySixPixels() {
+        let taps = [Vec2(65.5, 111.5), netTaps[1], netTaps[2], netTaps[3]]
 
         #expect(NetCorners.refine(taps, picture: netPicture()) == nil)
     }
 
-    @Test("a tap 30 pixels from the corner on a 600-pixel post is corrected")
-    func movesThirtyPixelsUpClose() {
-        let taps = [Vec2(81.5, 111.5), Vec2(503, 108), Vec2(503, 708), Vec2(108, 708)]
+    @Test("a tap 90 pixels from the corner on a 600-pixel post is corrected")
+    func movesNinetyPixelsUpClose() {
+        let taps = [Vec2(21.5, 111.5), Vec2(503, 108), Vec2(503, 708), Vec2(108, 708)]
         let answer = [Vec2(111.5, 111.5), Vec2(499.5, 111.5), Vec2(499.5, 708), Vec2(111.5, 708)]
 
-        #expect(isClose(NetCorners.refine(taps, picture: netPicture(height: 800)), to: answer))
+        #expect(isClose(NetCorners.refine(taps, picture: netPicture(height: 800, postEnd: 708)), to: answer))
     }
 
-    @Test("a tap 31 pixels from the corner on a 600-pixel post gives no answer")
-    func refusesThirtyOnePixelsUpClose() {
-        let taps = [Vec2(80.5, 111.5), Vec2(503, 108), Vec2(503, 708), Vec2(108, 708)]
+    @Test("a tap 91 pixels from the corner on a 600-pixel post gives no answer")
+    func refusesNinetyOnePixelsUpClose() {
+        let taps = [Vec2(20.5, 111.5), Vec2(503, 108), Vec2(503, 708), Vec2(108, 708)]
 
-        #expect(NetCorners.refine(taps, picture: netPicture(height: 800)) == nil)
+        #expect(NetCorners.refine(taps, picture: netPicture(height: 800, postEnd: 708)) == nil)
     }
 
     @Test("3 taps give no answer")
@@ -472,7 +492,7 @@ struct NetCornersTests {
     func shadowAcrossNet() {
         let picture = netPicture { x, y in
             guard y > 250 else { return nil }
-            let onPost = ((100..<112).contains(x) || (500..<512).contains(x)) && y < 440
+            let onPost = ((100..<112).contains(x) || (500..<512).contains(x)) && y < 408
             return onPost ? Paint(90, 60, 100) : Paint(120, 125, 150)
         }
 
@@ -511,6 +531,48 @@ struct NetCornersTests {
         #expect(NetCorners.refine(oneOutside, picture: netPicture()) == nil)
         #expect(NetCorners.refine(allOutside, picture: netPicture()) == nil)
     }
+
+    // Locking onto the net
+
+    @Test("4 dots in a straight line can't be a 6×4 net, so Record stays blocked")
+    func lockRefusesALine() {
+        #expect(NetCorners.lock(netPicture(), taps: (0..<4).map { Vec2(150 + 100 * Double($0), 300) }, lens: iPhone) == nil)
+    }
+
+    @Test("with no net in the picture, your dots stay where you tapped")
+    func lockKeepsTapsWithoutANet() {
+        let blank = paintedPicture(1920, 1080) { _, _ in lightFloor }
+
+        #expect(NetCorners.lock(blank, taps: nov16CarefulTaps, lens: iPhone) == nov16CarefulTaps)
+    }
+
+    @Test("your Nov 16 nets: dots nudged a finger-width (12 px) lock within 6 px of your careful taps on the 8 of 9 where the posts can be found",
+          .enabled(if: realVideosRequested))
+    func nov16RoughTapsLock() async throws {
+        var postsNotFound = 0
+        for (index, clip) in try nov16Clips().enumerated() {
+            let picture = try #require(try await Clip.picture(rinkClips.appendingPathComponent(clip.clip), at: 1.0))
+            let careful = clip.net.taps
+            guard NetCorners.refine(careful, picture: picture) != nil else {
+                postsNotFound += 1  // the dots stay red and the player places them
+                continue
+            }
+            let carefulLock = try #require(NetCorners.lock(picture, taps: careful, lens: iPhone), "\(clip.clip)")
+            let rough = careful.enumerated().map { corner, tap in
+                let angle = Double(index * 4 + corner) * 2.399963
+                return tap + 12 * Vec2(cos(angle), sin(angle))
+            }
+            let roughLock = try #require(NetCorners.lock(picture, taps: rough, lens: iPhone), "\(clip.clip) nudged")
+
+            for corner in 0..<4 {
+                #expect(simd_distance(roughLock[corner], carefulLock[corner]) <= 6, "\(clip.clip) corner \(corner)")
+            }
+            for corner in 2..<4 {
+                #expect(carefulLock[corner] == careful[corner] || abs(carefulLock[corner].y - careful[corner].y) <= 6, "\(clip.clip) bottom \(corner)")
+            }
+        }
+        #expect(postsNotFound == 1)
+    }
 }
 
 private struct Paint {
@@ -529,6 +591,25 @@ private let postTop = Vec2(110, 50), postBottom = Vec2(110, 350), tallPostBottom
 private let barLeft = Vec2(100, 107), barRight = Vec2(500, 107), longBarRight = Vec2(900, 107)
 private let netTaps = [Vec2(108, 108), Vec2(503, 108), Vec2(503, 408), Vec2(108, 408)]
 private let netCorners = [Vec2(111.5, 111.5), Vec2(499.5, 111.5), Vec2(499.5, 408), Vec2(111.5, 408)]
+private let iPhone = Lens(zoom: 1470.2, centerX: 960, centerY: 540)
+private let nov16CarefulTaps = [Vec2(1579.4, 538.2), Vec2(1812.8, 562.6), Vec2(1806.8, 926.0), Vec2(1575.8, 807.0)]
+private let realVideosRequested = ProcessInfo.processInfo.environment["CHEDDAR_REAL_VIDEOS"] == "1"
+private let rinkClips = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+    .deletingLastPathComponent().appendingPathComponent("videos/rink-clips")
+
+private struct TappedClip: Decodable {
+    struct Point: Decodable { let x: Double, y: Double }
+    struct Net: Decodable {
+        let leftTop: Point, rightTop: Point, rightBottom: Point, leftBottom: Point
+        var taps: [Vec2] { [leftTop, rightTop, rightBottom, leftBottom].map { Vec2($0.x, $0.y) } }
+    }
+    let clip: String
+    let net: Net
+}
+
+private func nov16Clips() throws -> [TappedClip] {
+    try JSONDecoder().decode([TappedClip].self, from: Data(contentsOf: rinkClips.appendingPathComponent("1x-measured-nov16/net-corners.json")))
+}
 
 private func isClose(_ found: Vec2, to answer: Vec2, within tolerance: Double) -> Bool {
     abs(found.x - answer.x) <= tolerance && abs(found.y - answer.y) <= tolerance
@@ -614,12 +695,12 @@ private func isBarEdge(_ edge: NetCorners.Line?) -> Bool {
     return abs(edge.at(300) - 114.5) <= 1e-6
 }
 
-private func netPicture(height: Int = 480, frame: Paint = frameRed, background: Paint = lightFloor,
+private func netPicture(height: Int = 480, postEnd: Int = 408, frame: Paint = frameRed, background: Paint = lightFloor,
                         showLeftPost: Bool = true, showRightPost: Bool = true, showBar: Bool = true,
                         overlay: (Int, Int) -> Paint? = { _, _ in nil }) -> Picture {
     paintedPicture(640, height) { x, y in
         if let painted = overlay(x, y) { return painted }
-        let inPostRows = (100..<height - 40).contains(y)
+        let inPostRows = (100..<postEnd).contains(y)
         if showLeftPost && inPostRows && (100..<112).contains(x) { return frame }
         if showRightPost && inPostRows && (500..<512).contains(x) { return frame }
         if showBar && (100..<112).contains(y) && (100..<512).contains(x) { return frame }

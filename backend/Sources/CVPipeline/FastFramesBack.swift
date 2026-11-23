@@ -13,6 +13,7 @@ struct FastFramesBack {
     private static let minSize = 20, maxSize = 1500, maxWidth = 100, maxHeight = 50
 
     let rows: Range<Int>, columns: Range<Int>
+    let scale: Double  // how big the net looks next to Nov 16, as in TwoFramesBack
     private let size: Int
     private var ring: [UInt8]  // the strip's darkness for the last 9 frames
     private var darkening: [Int16]
@@ -21,7 +22,8 @@ struct FastFramesBack {
     private var times = [Double](repeating: 0, count: framesKept)
     private var framesSeen = 0
 
-    init(rows: Range<Int>, columns: Range<Int>) {
+    init(rows: Range<Int>, columns: Range<Int>, scale: Double = 1) {
+        self.scale = scale
         self.rows = rows
         self.columns = columns
         size = rows.count * columns.count
@@ -156,9 +158,12 @@ struct FastFramesBack {
     }
 
     private func puckSizedSpot(from pixels: [Int]) -> Spot? {
-        guard (Self.minSize...Self.maxSize).contains(pixels.count) else { return nil }
+        let grow = max(1, scale), shrink = min(1, scale)
+        let sizes = Int((Double(Self.minSize) * shrink * shrink).rounded())...Int((Double(Self.maxSize) * grow * grow).rounded())
+        guard sizes.contains(pixels.count) else { return nil }
         let across = pixels.map { $0 % columns.count }, down = pixels.map { $0 / columns.count }
-        guard across.max()! - across.min()! < Self.maxWidth, down.max()! - down.min()! < Self.maxHeight else { return nil }
+        guard Double(across.max()! - across.min()!) < Double(Self.maxWidth) * grow,
+              Double(down.max()! - down.min()!) < Double(Self.maxHeight) * grow else { return nil }
         let strengths = pixels.map { darkening[$0] }
         guard strengths.sorted()[strengths.count * 9 / 10] >= Self.minStrength else { return nil }
         let total = strengths.reduce(0.0) { $0 + Double($1) }

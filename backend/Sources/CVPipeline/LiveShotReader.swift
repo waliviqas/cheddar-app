@@ -14,7 +14,7 @@ struct LiveShotReader {
     private(set) var corners: [Vec2] = []  // the net's corners, once moved onto the posts in the net frame
 
     init(lane: (rows: Range<Int>, columns: Range<Int>), pose: CameraPose, scale: Double) {
-        finder = FastFramesBack(rows: lane.rows, columns: lane.columns)
+        finder = FastFramesBack(rows: lane.rows, columns: lane.columns, scale: scale)
         logic = ShotLogic(pose: pose, scale: scale, laneX: Double(lane.columns.lowerBound)...Double(lane.columns.upperBound))
     }
 

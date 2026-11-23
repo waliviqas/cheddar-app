@@ -70,6 +70,11 @@ enum Clip {
         let duration = try await asset.load(.duration).seconds
         let last = min(end ?? duration, duration)
         guard start < last else { return }
+        // A clock coarser than the Camera app's 1/2400 s, like 1/600 s, can't hold 1/240 s steps (frames land 2 and 3
+        // ticks apart in turn). So each step is rounded to whole frames, which keeps a dropped frame's gap, then nudged
+        // 1/100 of the way back to the file's time, which keeps the camera's real rate (239.69 fps on the Nov 16 clips).
+        let roundSteps = try await track.load(.naturalTimeScale) < 2400
+        var previous: (read: Double, time: Double)?
 
         let reader = try AVAssetReader(asset: asset)
         if start > 0 || end != nil {
@@ -91,9 +96,17 @@ enum Clip {
                 let time = CMSampleBufferGetPresentationTimeStamp(sample)
                 guard time.isNumeric, (start..<last).contains(time.seconds),
                       let buffer = CMSampleBufferGetImageBuffer(sample) else { return }
+                var seconds = time.seconds
+                if roundSteps {
+                    if let previous {
+                        let stepped = previous.time + ((time.seconds - previous.read) * 240).rounded() / 240
+                        seconds = stepped + (time.seconds - stepped) / 100
+                    }
+                    previous = (time.seconds, seconds)
+                }
                 CVPixelBufferLockBaseAddress(buffer, .readOnly)
                 defer { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }
-                try body(buffer, time.seconds)
+                try body(buffer, seconds)
             }
         }
         if reader.status == .failed { throw reader.error ?? CocoaError(.fileReadCorruptFile) }

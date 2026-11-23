@@ -79,6 +79,23 @@ struct PuckTrackTests {
         #expect(PuckTrack.straightestLine(puckFrames(30, across: 13_900.0 / 240), towardNet: 1)?.count == 30)
     }
 
+    // Any distance
+
+    @Test("from 12 ft, with the net 1.5× bigger, a puck at 20,900 pixels a second still gets a line")
+    func fastPuckUpClose() {
+        #expect(PuckTrack.straightestLine(puckFrames(30, across: 20_900.0 / 240), towardNet: 1, scale: 1.5)?.count == 30)
+    }
+
+    @Test("with the net 1.5× bigger, 21,100 pixels a second is still too fast")
+    func tooFastUpClose() {
+        #expect(PuckTrack.straightestLine(puckFrames(30, across: 21_100.0 / 240), towardNet: 1, scale: 1.5) == nil)
+    }
+
+    @Test("at today's net size, 20,900 pixels a second is too fast")
+    func tooFastToday() {
+        #expect(PuckTrack.straightestLine(puckFrames(30, across: 20_900.0 / 240), towardNet: 1) == nil)
+    }
+
     @Test("14,100 pixels per second is too fast for a line")
     func tooFastForLine() {
         #expect(PuckTrack.straightestLine(puckFrames(30, across: 14_100.0 / 240), towardNet: 1) == nil)
