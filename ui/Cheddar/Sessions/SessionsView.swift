@@ -44,9 +44,30 @@ private struct SessionRow: View {
     let session: Session
     let onWatch: (() -> Void)?   // plays the whole session's video; nil when there isn't one
 
-    // Stacked top to bottom so it fits a phone held upright: date, the numbers and the net, then the video button.
+    // Stacked top to bottom so it fits a phone held upright: a still from the session's video, the date, then the
+    // numbers and the net.
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            if session.video != nil {
+                Color.clear
+                    .frame(height: 140)
+                    .frame(maxWidth: .infinity)
+                    .overlay(SessionCover(session: session))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(alignment: .bottomLeading) {
+                        if let onWatch {
+                            Button(action: onWatch) {
+                                Label("Watch full session", systemImage: "play.fill")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 8)
+                                    .background(.ultraThinMaterial, in: Capsule())
+                            }
+                            .padding(10)
+                        }
+                    }
+            }
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(session.date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
@@ -67,16 +88,6 @@ private struct SessionRow: View {
                 Spacer()
                 NetMapView(shots: session.shots)
                     .frame(width: 110)
-            }
-            if let onWatch {
-                Button(action: onWatch) {
-                    Label("Watch full session", systemImage: "play.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(.white.opacity(0.1), in: Capsule())
-                }
             }
         }
         .padding(12)

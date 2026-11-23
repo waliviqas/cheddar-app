@@ -79,7 +79,7 @@ extension NetSquare {
         case .topMiddle: "Top middle"
         case .topRight: "Top right"
         case .middleLeft: "Middle left"
-        case .middle: "Five hole"
+        case .middle: "Middle"
         case .middleRight: "Middle right"
         case .bottomLeft: "Bottom left"
         case .bottomMiddle: "Bottom middle"

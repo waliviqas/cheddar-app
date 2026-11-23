@@ -1,24 +1,31 @@
 import SwiftUI
 
 /*
-This view's only job is: draw the net's outline and its 3 × 3 grid over the camera picture, joined to the 4 corners the
-player set. The lines follow the net's perspective, so the squares on the far side of the net look smaller, like the
-real net does.
+This view's only job is: draw the net's outline in gold and its 3 × 3 grid in thin white lines over the camera picture,
+joined to the 4 corners the player set. The lines follow the net's perspective, so the squares on the far side of the net
+look smaller, like the real net does.
 */
 struct NetGridOverlay: View {
     let corners: [CGPoint]  // top-left, top-right, bottom-right, bottom-left, in screen points
 
     var body: some View {
-        Path { path in
-            let spot = NetPerspective(corners)
-            for third in [0.0, 1.0 / 3, 2.0 / 3, 1.0] {
-                path.move(to: spot(third, 0))  // the posts and the 2 lines between them
-                path.addLine(to: spot(third, 1))
-                path.move(to: spot(0, third))  // the crossbar, the 2 lines across and the bottom
-                path.addLine(to: spot(1, third))
+        let spot = NetPerspective(corners)
+        ZStack {
+            Path { path in
+                for third in [1.0 / 3, 2.0 / 3] {
+                    path.move(to: spot(third, 0))  // the 2 lines between the posts
+                    path.addLine(to: spot(third, 1))
+                    path.move(to: spot(0, third))  // the 2 lines across
+                    path.addLine(to: spot(1, third))
+                }
             }
+            .stroke(.white.opacity(0.9), lineWidth: 1)
+            Path { path in
+                path.addLines([spot(0, 0), spot(1, 0), spot(1, 1), spot(0, 1)])
+                path.closeSubpath()
+            }
+            .stroke(Theme.cheddar, style: StrokeStyle(lineWidth: 2.5, lineJoin: .round))
         }
-        .stroke(Theme.cheddar, lineWidth: 2)
     }
 }
 
