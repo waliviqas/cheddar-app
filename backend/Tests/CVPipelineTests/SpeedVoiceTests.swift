@@ -95,6 +95,56 @@ struct SpeedVoiceTests {
         #expect(screen == nil)
         #expect(SpeedVoice.shared.spoken.last == "71.3")
     }
+
+    // Sound on from Record to Stop
+
+    @Test("once recording starts, the sound stays on between numbers")
+    func soundStaysOnBetweenNumbers() async throws {
+        let voice = SpeedVoice.shared
+        voice.startRecording()
+        let before = voice.spoken.count
+        voice.say([61.4])
+        try await waitUntil { voice.spoken.count >= before + 1 }
+
+        #expect(voice.holdsSound)
+        voice.say([58.2])
+        try await waitUntil { voice.spoken.count >= before + 2 }
+        #expect(voice.holdsSound)
+        voice.stopRecording()
+    }
+
+    @Test("starting a recording plays one silent line that isn't counted as a number")
+    func silentLineAtRecord() async throws {
+        let voice = SpeedVoice.shared
+        let silent = voice.silentLines, spoken = voice.spoken.count
+        voice.startRecording()
+        try await Task.sleep(for: .seconds(2))
+
+        #expect(voice.silentLines == silent + 1)
+        #expect(voice.spoken.count == spoken)
+        voice.stopRecording()
+    }
+
+    @Test("after Stop, with nothing left to say, the sound goes off")
+    func soundOffAfterStop() {
+        let voice = SpeedVoice.shared
+        voice.startRecording()
+        voice.stopRecording()
+
+        #expect(!voice.holdsSound)
+    }
+
+    @Test("Stop in the middle of a number: the sound goes off once the number ends")
+    func stopMidNumber() async throws {
+        let voice = SpeedVoice.shared
+        voice.startRecording()
+        voice.say([62.4])
+        voice.stopRecording()
+
+        #expect(voice.holdsSound)
+        try await waitUntil { !voice.holdsSound }
+        #expect(voice.spoken.last == "62.4")
+    }
     #endif
 }
 

@@ -10,11 +10,14 @@ final class ShotRecorder: NSObject, AVCaptureFileOutputRecordingDelegate, AVCapt
     private(set) var fieldOfView = 0.0  // how wide the camera sees across the video, in degrees; 0 until it's locked
     private let output = AVCaptureMovieFileOutput()
     private let frames = AVCaptureVideoDataOutput()
-    private let frameLine = DispatchQueue(label: "cheddar.frames")
+    private let frameLine = DispatchQueue(label: "cheddar.frames", qos: .userInitiated)  // kept on the fast cores
     private var live: LiveSpeeds?  // only touched on frameLine
     private var waitingForFrame: (id: Int, done: (CVPixelBuffer?) -> Void)?  // only touched on frameLine
     private var frameRequests = 0  // only touched on frameLine
     private var finished: ((URL?) -> Void)?
+
+    // True when the camera hands every frame to the live reader while it records. Some phones can't do both at once.
+    var handsOverFrames: Bool { session.outputs.contains(frames) }
 
     // Asks permission, wires the camera, and waits until it is truly running before saying ready.
     func start() async -> Bool {

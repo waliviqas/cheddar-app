@@ -8,7 +8,7 @@ This class's only job is: work out where the phone is and which way it's aimed, 
 It finds the one phone spot and aim that would make a 6×4 ft net land on the 4 corners.
 Inches: x runs along the goal line from the post on the picture's left, y runs out toward the shooter, z runs up from the floor.
 */
-public struct CameraPose {
+public struct CameraPose: Sendable {
     private static let width = 72.0, height = 48.0, maxMissShare = 0.015
     private static let net = [Vec3(0, 0, height), Vec3(width, 0, height), Vec3(width, 0, 0), Vec3(0, 0, 0)]
 

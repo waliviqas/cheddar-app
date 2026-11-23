@@ -13,22 +13,31 @@ struct LiveShotReader {
     private var lostSinceLast = 0
     private(set) var corners: [Vec2] = []  // the net's corners, once moved onto the posts in the net frame
 
-    init(lane: (rows: Range<Int>, columns: Range<Int>), pose: CameraPose, scale: Double) {
+    init(lane: (rows: Range<Int>, columns: Range<Int>), pose: CameraPose, scale: Double, readsLater: Bool = false) {
         finder = FastFramesBack(rows: lane.rows, columns: lane.columns, scale: scale)
-        logic = ShotLogic(pose: pose, scale: scale, laneX: Double(lane.columns.lowerBound)...Double(lane.columns.upperBound))
+        logic = ShotLogic(pose: pose, scale: scale, laneX: Double(lane.columns.lowerBound)...Double(lane.columns.upperBound),
+                          readsLater: readsLater)
     }
 
     // Starts from the frame ShotReader.netFrameTime into the video, the one ShotReader.read uses: moves the taps onto the
     // posts (keeping them as tapped when the posts can't be found), places the phone and picks the strip to search. No
-    // answer means the taps can't be a net.
-    init?(netFrame: CVPixelBuffer, taps: [Vec2], lens: Lens) {
+    // answer means the taps can't be a net. readsLater: decided shots are handed back by takeDecided for `fitter`.
+    init?(netFrame: CVPixelBuffer, taps: [Vec2], lens: Lens, readsLater: Bool = false) {
         CVPixelBufferLockBaseAddress(netFrame, .readOnly)
-        let picture = Picture(frame: netFrame)
+        let picture = Picture(frame: netFrame, around: taps)
         CVPixelBufferUnlockBaseAddress(netFrame, .readOnly)
         let corners = NetCorners.refine(taps, picture: picture) ?? taps
         guard let pose = CameraPose(corners: corners, lens: lens) else { return nil }
-        self.init(lane: ShotReader.lane(corners: corners, pose: pose), pose: pose, scale: ShotReader.netScale(corners))
+        self.init(lane: ShotReader.lane(corners: corners, pose: pose), pose: pose, scale: ShotReader.netScale(corners),
+                  readsLater: readsLater)
         self.corners = corners
+    }
+
+    var fitter: ShotLogic.Fitter { logic.fitter }
+
+    // The shots decided since the last call, when reading later.
+    mutating func takeDecided() -> [ShotLogic.Decided] {
+        logic.takeDecided()
     }
 
     // Every shot so far, said out loud or held back, for comparing with the after-Stop read.

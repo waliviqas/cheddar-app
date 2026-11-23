@@ -150,6 +150,64 @@ struct LiveShotReaderTests {
         #expect(run.said.map(\.mph) == run.afterStop.map(\.mph))
     }
 
+    // Speed math done later, off the camera's line
+
+    @Test("the speed math gives the same speed, spot and time when it's worked out later")
+    func sameNoteLater() throws {
+        let now = try film([firstShot], frames: [204..<421])
+        let later = try film([firstShot], frames: [204..<421], readsLater: true)
+        let one = try #require(now.notes.first?.reading), other = try #require(later.notes.first?.reading)
+
+        #expect(later.notes.count == 1)
+        #expect(one.mph == other.mph && one.hit == other.hit && one.releaseTime == other.releaseTime)
+    }
+
+    @Test("shots waiting for the speed math are handed over in order, once")
+    func decidedInOrderOnce() throws {
+        let run = try film([firstShot, secondShot], frames: [204..<421, 924..<1141], readsLater: true)
+
+        #expect(run.decided.count == 2)
+        #expect(run.decided.map(\.decidedAt) == run.decided.map(\.decidedAt).sorted())
+        #expect(run.handedOverAgain == 0)
+    }
+
+    // Frames lost after the puck hits the net
+
+    @Test("a frame lost 10 frames after the puck was last seen doesn't keep the shot quiet")
+    func lateLostFrame() throws {
+        let last = Int((firstShot.last!.t * 240).rounded())
+
+        #expect(try film([firstShot], frames: [204..<421], dropped: [last + 10]).said.count == 1)
+    }
+
+    @Test("a frame lost 6 frames after the puck was last seen still keeps it quiet, and 7 frames after doesn't")
+    func lateLostFrameLimit() throws {
+        let last = Int((firstShot.last!.t * 240).rounded())
+
+        #expect(try film([firstShot], frames: [204..<421], dropped: [last + 6]).said.isEmpty)
+        #expect(try film([firstShot], frames: [204..<421], dropped: [last + 7]).said.count == 1)
+    }
+
+    @Test("your 9 Nov 16 videos with 1% of frames lost at random, 3 tries each: at least 5 of 19 said live on average, none wrong",
+          .enabled(if: realVideosRequested))
+    func nov16LostFramesSaidLive() async throws {
+        var said = 0
+        for (index, clip) in try nov16Clips().enumerated() {
+            let url = rinkClips.appendingPathComponent(clip.clip)
+            let afterStop = try #require(try await ShotReader.read(url, taps: clip.net.taps, lens: iPhone))
+            let tries = try await liveSpeeds(url, taps: clip.net.taps, dropping: 0.01, seeds: (1...3).map { UInt64(index * 10 + $0) })
+            for live in tries {
+                for one in live {
+                    #expect(afterStop.contains { abs($0.releaseTime - one.releaseTime) < 0.05 && abs($0.mph - one.mph) <= 0.1 },
+                            "\(clip.clip): said \(one.mph)")
+                }
+                said += live.count
+            }
+        }
+
+        #expect(said >= 15, "\(said) of 57 said live")
+    }
+
     // Starting from the net frame
 
     @Test("when the posts can't be found, the live reader starts anyway with the taps as tapped")
@@ -353,6 +411,183 @@ struct LiveSpeedsTests {
         #expect(live.missed(run.afterStop).count == 1)
     }
 
+    // Speed math on its own line
+
+    @Test("your Nov 16 video: the puck finder takes under 0.6 ms a frame on average", .enabled(if: realVideosRequested))
+    func puckFinderSpeed() async throws {
+        let clip = try #require(try nov16Clips().first)
+        let pose = try #require(CameraPose(corners: clip.net.taps, lens: iPhone))
+        let lane = ShotReader.lane(corners: clip.net.taps, pose: pose)
+        var finder = FastFramesBack(rows: lane.rows, columns: lane.columns)
+        let clock = ContinuousClock()
+        var spent = Duration.zero, frames = 0
+        try await eachCameraFrame(rinkClips.appendingPathComponent(clip.clip)) { frame, time in
+            CVPixelBufferLockBaseAddress(frame, .readOnly)
+            spent += clock.measure { _ = finder.add(frame, time: time) }
+            CVPixelBufferUnlockBaseAddress(frame, .readOnly)
+            frames += 1
+        }
+
+        #expect(frames > 0)
+        #expect(spent / max(frames, 1) < .microseconds(600), "\(spent / max(frames, 1)) a frame")
+    }
+
+    @Test("your Nov 16 video: every frame where a shot is decided goes back to the camera in under 2 ms",
+          .enabled(if: realVideosRequested))
+    func decisionFramesAreQuick() async throws {
+        let clip = try #require(try nov16Clips().first)
+        let live = LiveSpeeds(taps: clip.net.taps, lens: iPhone, say: Heard().say)
+        live.start(videoStart: 0)
+        let clock = ContinuousClock()
+        var slowest = Duration.zero
+        try await eachCameraFrame(rinkClips.appendingPathComponent(clip.clip)) { frame, time in
+            let before = live.decisions
+            let spent = clock.measure { live.frame(frame, time: time) }
+            if live.decisions > before { slowest = max(slowest, spent) }
+        }
+
+        #expect(live.decisions > 0)
+        #expect(slowest < .milliseconds(2), "\(slowest)")
+    }
+
+    @Test("a shot decided on the last frame before Stop is still saved")
+    func shotDecidedRightBeforeStop() throws {
+        let live = pretendLive(Heard())
+        live.start(videoStart: 0)
+        _ = try filmLive(live, [firstShot], frames: [204..<367], watchSaid: false)
+        live.stop()
+
+        #expect(live.readings.count == 1)
+    }
+
+    @Test("with the speed math off the camera's line, two shots are still said in order at the after-Stop speeds")
+    func twoShotsOffTheLine() async throws {
+        let heard = Heard(), live = pretendLive(heard)
+        live.start(videoStart: 0)
+        let run = try filmLive(live, [firstShot, secondShot], frames: [204..<421, 924..<1141])
+        await settle()
+
+        #expect(heard.speeds == run.afterStop.map(\.mph))
+        #expect(live.readings.map(\.releaseTime) == live.readings.map(\.releaseTime).sorted())
+    }
+
+    // Handing back the shots it said
+
+    @Test("one shot said live is handed back with the speed you heard")
+    func handsBackOneShot() async throws {
+        let heard = Heard(), live = pretendLive(heard)
+        live.start(videoStart: 0)
+        _ = try filmLive(live, [firstShot], frames: [204..<421])
+        await settle()
+
+        #expect(live.readings.count == 1)
+        #expect(live.readings.map(\.mph) == heard.speeds)
+    }
+
+    @Test("two shots in a row are handed back in the order they were said")
+    func handsBackTwoShots() async throws {
+        let heard = Heard(), live = pretendLive(heard)
+        live.start(videoStart: 0)
+        _ = try filmLive(live, [firstShot, secondShot], frames: [204..<421, 924..<1141])
+        await settle()
+
+        #expect(live.readings.count == 2)
+        #expect(live.readings.map(\.mph) == heard.speeds)
+    }
+
+    @Test("a shot handed back keeps where it hit the net, for the shot map")
+    func handsBackWhereItHit() throws {
+        let live = pretendLive(Heard())
+        live.start(videoStart: 0)
+        let run = try filmLive(live, [firstShot], frames: [204..<421])
+        let afterStop = try #require(run.afterStop.first)
+
+        #expect(live.readings.first?.hit == afterStop.hit)
+    }
+
+    @Test("with the video starting at 100.000 s, a shot handed back has its time within 1 frame of after Stop, for its replay clip")
+    func handsBackTheShotsTime() throws {
+        let live = pretendLive(Heard())
+        live.start(videoStart: 100)
+        let run = try filmLive(live, [firstShot], frames: [204..<421], clock: 100)
+        let afterStop = try #require(run.afterStop.first)
+
+        #expect(abs((live.readings.first?.releaseTime ?? 0) - afterStop.releaseTime) <= 1.0 / 240)
+    }
+
+    @Test("a shot with a dropped frame wasn't said, so it isn't handed back")
+    func droppedShotNotHandedBack() throws {
+        let live = pretendLive(Heard())
+        live.start(videoStart: 0)
+        _ = try filmLive(live, [firstShot], frames: [204..<421], dropped: [264])
+
+        #expect(live.readings.isEmpty)
+    }
+
+    @Test("4 taps in a straight line hand back nothing, without a crash")
+    func badTapsHandBackNothing() throws {
+        let live = LiveSpeeds(taps: inALine, lens: iPhone, say: Heard().say)
+        live.start(videoStart: 0)
+        _ = try filmLive(live, [firstShot], frames: [204..<421])
+
+        #expect(live.readings.isEmpty)
+    }
+
+    @Test("asking for the shots on the main line while frames still arrive never crashes, and the list only grows")
+    func readingsWhileFilming() async throws {
+        let live = pretendLive(Heard())
+        live.start(videoStart: 0)
+        async let filmed: Void = onBackground { _ = try filmLive(live, [firstShot, secondShot], frames: [204..<421, 924..<1141]) }
+        var counts: [Int] = []
+        for _ in 0..<200 {
+            counts.append(live.readings.count)
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        try await filmed
+        counts.append(live.readings.count)
+
+        #expect(counts == counts.sorted())
+        #expect(counts.last == 2)
+    }
+
+    @Test("a shot filmed after Stop isn't handed back")
+    func afterStopNotHandedBack() throws {
+        let live = pretendLive(Heard())
+        live.start(videoStart: 0)
+        live.stop()
+        _ = try filmLive(live, [firstShot], frames: [204..<421])
+
+        #expect(live.readings.isEmpty)
+    }
+
+    @Test("your 9 Nov 16 videos read live hand back all 19 shots, missing the radar by 2.68 mph or less, with no second read",
+          .enabled(if: realVideosRequested))
+    func nov16LiveReadings() async throws {
+        var found = 0, extras = 0, misses: [Double] = []
+        for clip in try nov16Clips() {
+            let url = rinkClips.appendingPathComponent(clip.clip)
+            let name = URL(fileURLWithPath: clip.clip).deletingPathExtension().lastPathComponent
+            let live = LiveSpeeds(taps: clip.net.taps, lens: iPhone, say: Heard().say)
+            live.start(videoStart: 0)
+            try await eachCameraFrame(url) { frame, time in live.frame(frame, time: time) }
+            live.stop()
+            let readings = live.readings
+            var matched = Set<Int>()
+            for known in nov16Radar where known.clip == name {
+                guard let i = readings.indices.first(where: { !matched.contains($0) && abs(readings[$0].releaseTime - known.start) < 0.3 })
+                else { continue }
+                matched.insert(i)
+                found += 1
+                misses.append(abs(readings[i].mph - known.radar))
+            }
+            extras += readings.count - matched.count
+        }
+
+        #expect(found == 19)
+        #expect(extras == 0)
+        #expect(misses.reduce(0, +) / Double(max(misses.count, 1)) <= 2.68, "\(misses.reduce(0, +) / Double(max(misses.count, 1))) mph")
+    }
+
     @Test("your 9 Nov 16 videos: each of the 19 shots is said once and saved once, and the saved speeds miss the radar by 2.68 mph or less on average, no worse than after Stop",
           .enabled(if: realVideosRequested))
     func nov16SavedShots() async throws {
@@ -444,16 +679,18 @@ private struct Filmed {
     var said: [(time: Double, reading: ShotReading)] = []
     var notes: [ShotLogic.Note] = []
     var afterStop: [ShotReading] = []
+    var decided: [ShotLogic.Decided] = []  // with readsLater, the shots handed over for the speed math
+    var handedOverAgain = 0  // shots handed over a second time, which should be none
 }
 
 // Films the pretend shots as 1920×1080 pictures, a dark 12×12 puck on light ice, and feeds them to a live reader one at a
 // time. The after-Stop answer reads the same pictures the after-Stop way: every spot frame first, then the shots.
 private func film(_ shots: [[Sighting]], frames: [Range<Int>], dropped: Set<Int> = [], droppedBeforeStart: Int = 0,
-                  handInDarkness: Bool = false) throws -> Filmed {
+                  handInDarkness: Bool = false, readsLater: Bool = false) throws -> Filmed {
     var byFrame: [Int: [Vec2]] = [:]
     for (t, spot) in shots.joined() { byFrame[Int((t * 240).rounded()), default: []].append(spot) }
     let camera = try Camera()
-    var reader = LiveShotReader(lane: lane, pose: phone(), scale: 1)
+    var reader = LiveShotReader(lane: lane, pose: phone(), scale: 1, readsLater: readsLater)
     var everyFrame = FastFramesBack(rows: lane.rows, columns: lane.columns)
     var spotFrames: [SpotFrame] = []
     var darkness = [UInt8](repeating: 0, count: lane.rows.count * lane.columns.count)
@@ -478,7 +715,13 @@ private func film(_ shots: [[Sighting]], frames: [Range<Int>], dropped: Set<Int>
                                   : reader.feed(camera.frame, time: time)
         filmed.said += said.map { (time, $0) }
     }
-    filmed.notes = reader.notes
+    if readsLater {
+        filmed.decided = reader.takeDecided()
+        filmed.handedOverAgain = reader.takeDecided().count
+        filmed.notes = filmed.decided.map(reader.fitter.note)
+    } else {
+        filmed.notes = reader.notes
+    }
     filmed.afterStop = ShotReader.shots(in: spotFrames, pose: phone(), scale: 1)
     return filmed
 }
@@ -589,6 +832,27 @@ private func liveSpeeds(_ url: URL, taps: [Vec2], dropping rate: Double, seed: U
     return said
 }
 
+// The same with several drop patterns at once, one live reader each, so the video is read only once.
+private func liveSpeeds(_ url: URL, taps: [Vec2], dropping rate: Double, seeds: [UInt64]) async throws -> [[ShotReading]] {
+    var corners = taps
+    if let still = try await Clip.picture(url, at: 1.0), let better = NetCorners.refine(taps, picture: still) { corners = better }
+    let pose = try #require(CameraPose(corners: corners, lens: iPhone))
+    let lane = ShotReader.lane(corners: corners, pose: pose), scale = ShotReader.netScale(corners)
+    var readers = seeds.map { _ in LiveShotReader(lane: lane, pose: pose, scale: scale) }
+    var randoms = seeds.map { SplitMix(state: $0) }
+    var said = seeds.map { _ in [ShotReading]() }
+    try await eachCameraFrame(url) { frame, time in
+        for index in readers.indices {
+            if randoms[index].next() < rate {
+                readers[index].noteDropped()
+            } else {
+                said[index] += readers[index].feed(frame, time: time)
+            }
+        }
+    }
+    return said
+}
+
 // Each frame of a video in the camera's own 420 format, with its time.
 private func eachCameraFrame(_ url: URL, _ body: (CVPixelBuffer, Double) throws -> Void) async throws {
     let asset = AVURLAsset(url: url)
@@ -634,7 +898,7 @@ private struct FilmedLive {
 // time in the video plus `clock`. Frames before `handOverFrom` are filmed but never handed over. The after-Stop answer
 // reads every filmed frame.
 private func filmLive(_ live: LiveSpeeds, _ shots: [[Sighting]], frames: [Range<Int>], clock: Double = 0,
-                      handOverFrom: Int = 0, dropped: Set<Int> = []) throws -> FilmedLive {
+                      handOverFrom: Int = 0, dropped: Set<Int> = [], watchSaid: Bool = true) throws -> FilmedLive {
     var byFrame: [Int: [Vec2]] = [:]
     for (t, spot) in shots.joined() { byFrame[Int((t * 240).rounded()), default: []].append(spot) }
     let camera = try Camera()
@@ -652,6 +916,10 @@ private func filmLive(_ live: LiveSpeeds, _ shots: [[Sighting]], frames: [Range<
             live.dropped()
             continue
         }
+        guard watchSaid else {
+            live.frame(camera.frame, time: clock + time)
+            continue
+        }
         let before = live.said.count
         live.frame(camera.frame, time: clock + time)
         if live.said.count > before { filmed.saidOn.append(index) }
@@ -662,7 +930,7 @@ private func filmLive(_ live: LiveSpeeds, _ shots: [[Sighting]], frames: [Range<
 
 // A LiveSpeeds whose live reader searches the small strip around the pretend shots, so the tests stay quick.
 private func pretendLive(_ heard: Heard) -> LiveSpeeds {
-    LiveSpeeds(say: heard.say) { _ in LiveShotReader(lane: lane, pose: phone(), scale: 1) }
+    LiveSpeeds(say: heard.say) { _ in LiveShotReader(lane: lane, pose: phone(), scale: 1, readsLater: true) }
 }
 
 // Stands in for the voice: keeps each speed it's asked to say, and whether it was asked on the main line.

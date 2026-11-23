@@ -21,11 +21,39 @@ struct ShotLogic {
         var said: Bool { kept && framesLost == 0 }
     }
 
+    // A decided shot not yet read: everything the speed math needs, so it can run off the camera's line.
+    struct Decided: Sendable {
+        let flight: [TrackPoint], frames: [SpotFrame], losses: [Loss], capped: Bool, decidedAt: Double
+    }
+
+    // Frames the camera lost, from the frame before them, near a decided shot.
+    struct Loss: Sendable {
+        let from: Double, lost: Int
+    }
+
+    // The speed math for a decided shot. It gives the same note on any line.
+    struct Fitter: Sendable {
+        let pose: CameraPose, scale: Double, direction: Double
+
+        func note(_ shot: Decided) -> Note {
+            let track = PuckTrack.exact(Flight(points: shot.flight), frames: shot.frames, towardNet: direction, scale: scale)
+            let fit = track.flatMap { ShotFit.read($0, pose: pose) }
+            // Frames lost after the puck was last seen (plus 6 frames) can't change its speed, so they don't hold it back.
+            let lastSeen = max(shot.flight.last!.t, track?.last?.t ?? shot.flight.last!.t)
+            let lost = shot.losses.filter { $0.from < lastSeen + ShotLogic.lostReach - 1e-6 }.reduce(0) { $0 + $1.lost }
+            return Note(reading: fit.map { ShotReading(releaseTime: $0.releaseTime, mph: $0.mph, hit: $0.hit, slid: $0.slid) },
+                        kept: fit.map { ShotReader.keeps($0, scale: scale) } ?? false,
+                        framesLost: lost, capped: shot.capped, decidedAt: shot.decidedAt)
+        }
+    }
+
     private static let safetyCap = 0.15, historySeconds = 3.0, steadyStart = 1.0, typicalSeconds = 10.0
     // A lost frame changes the spots up to 4 frames on each side of it, since the spotter compares the middle of 9.
     private static let lostReach = 6.0 / 240
 
     private(set) var notes: [Note] = []
+    private(set) var decided: [Decided] = []  // filled instead of notes when reading later
+    let readsLater: Bool
     private let pose: CameraPose, scale: Double, direction: Double, laneX: ClosedRange<Double>
     private var history: [SpotFrame] = []
     private var recentChanged: [(time: Double, changed: Int)] = []
@@ -37,12 +65,21 @@ struct ShotLogic {
     private var gaps: [(from: Double, to: Double, lost: Int)] = []
     private var frameTime = 0.0
 
-    // laneX: the search strip's columns, which spots never leave.
-    init(pose: CameraPose, scale: Double, laneX: ClosedRange<Double>) {
+    // laneX: the search strip's columns, which spots never leave. readsLater: decided shots wait in `decided` for
+    // `fitter` instead of being read here.
+    init(pose: CameraPose, scale: Double, laneX: ClosedRange<Double>, readsLater: Bool = false) {
         self.pose = pose
         self.scale = scale
         self.laneX = laneX
+        self.readsLater = readsLater
         direction = ShotReader.towardNet(pose)
+    }
+
+    var fitter: Fitter { Fitter(pose: pose, scale: scale, direction: direction) }
+
+    mutating func takeDecided() -> [Decided] {
+        defer { decided.removeAll() }
+        return decided
     }
 
     // Camera frames were lost between two frames that arrived.
@@ -129,13 +166,14 @@ struct ShotLogic {
             let trackFrom = chosen[0].t - PuckTrack.secondsBefore
             // A lost frame inside any piece could change which piece is chosen, so losses count from the earliest piece.
             let windowStart = pieces[0][0].t - PuckTrack.secondsBefore
-            let recent = history.filter { $0.time >= trackFrom - 0.01 }
-            let fit = PuckTrack.exact(Flight(points: chosen), frames: recent, towardNet: direction, scale: scale)
-                .flatMap { ShotFit.read($0, pose: pose) }
-            let lost = gaps.filter { $0.to > windowStart - Self.lostReach && $0.from < frameTime }.reduce(0) { $0 + $1.lost }
-            notes.append(Note(reading: fit.map { ShotReading(releaseTime: $0.releaseTime, mph: $0.mph, hit: $0.hit, slid: $0.slid) },
-                              kept: fit.map { ShotReader.keeps($0, scale: scale) } ?? false,
-                              framesLost: lost, capped: capped, decidedAt: time))
+            let losses = gaps.filter { $0.to > windowStart - Self.lostReach && $0.from < frameTime }.map { Loss(from: $0.from, lost: $0.lost) }
+            let shot = Decided(flight: chosen, frames: history.filter { $0.time >= trackFrom - 0.01 }, losses: losses,
+                               capped: capped, decidedAt: time)
+            if readsLater {
+                decided.append(shot)
+            } else {
+                notes.append(fitter.note(shot))
+            }
             closedUntil = anchor + window
             parts.removeFirst(count)
         }

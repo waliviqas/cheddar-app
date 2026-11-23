@@ -532,6 +532,24 @@ struct NetCornersTests {
         #expect(NetCorners.refine(allOutside, picture: netPicture()) == nil)
     }
 
+    @Test("your 9 Nov 16 nets snap to exactly the same corners when only the box around the taps is worked out",
+          .enabled(if: realVideosRequested))
+    func nov16BoxSnap() async throws {
+        for clip in try nov16Clips() {
+            var full: Picture?, box: Picture?
+            do {
+                try await Clip.eachFrame(rinkClips.appendingPathComponent(clip.clip), from: 1.0) { buffer, _ in
+                    full = Picture(frame: buffer)
+                    box = Picture(frame: buffer, around: clip.net.taps)
+                    throw FrameRead()
+                }
+            } catch is FrameRead {}
+            let whole = try #require(full), boxed = try #require(box)
+
+            #expect(NetCorners.refine(clip.net.taps, picture: boxed) == NetCorners.refine(clip.net.taps, picture: whole), "\(clip.clip)")
+        }
+    }
+
     // Locking onto the net
 
     @Test("4 dots in a straight line can't be a 6×4 net, so Record stays blocked")
@@ -596,6 +614,8 @@ private let nov16CarefulTaps = [Vec2(1579.4, 538.2), Vec2(1812.8, 562.6), Vec2(1
 private let realVideosRequested = ProcessInfo.processInfo.environment["CHEDDAR_REAL_VIDEOS"] == "1"
 private let rinkClips = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
     .deletingLastPathComponent().appendingPathComponent("videos/rink-clips")
+
+private struct FrameRead: Error {}
 
 private struct TappedClip: Decodable {
     struct Point: Decodable { let x: Double, y: Double }

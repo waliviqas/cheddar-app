@@ -16,6 +16,8 @@ public final class SpeedVoice: NSObject, AVSpeechSynthesizerDelegate {
     private(set) var spoken: [String] = []
     private(set) var practiceLines = 0
     private(set) var holdsSound = false
+    private(set) var silentLines = 0
+    private var recording = false  // the sound stays on from Record to Stop
 
     private override init() {
         super.init()
@@ -37,10 +39,37 @@ public final class SpeedVoice: NSObject, AVSpeechSynthesizerDelegate {
         }
     }
 
+    // Recording started. When no other app is playing, the sound goes on now and stays on until Stop, so a number never
+    // waits for it, and one silent line wakes the speaker (the practice lines only warm the voice). With music playing,
+    // each number turns the sound on as before, so the music only dips while a number is said.
+    public func startRecording() {
+        #if os(iOS)
+        let sound = AVAudioSession.sharedInstance()
+        guard !sound.isOtherAudioPlaying, (try? sound.setActive(true)) != nil else { return }
+        #endif
+        recording = true
+        holdsSound = true
+        let silent = utterance("0")
+        silent.volume = 0
+        voice.speak(silent)
+        silentLines += 1
+    }
+
+    // Recording stopped: the sound goes off once nothing is left to say.
+    public func stopRecording() {
+        guard recording else { return }
+        recording = false
+        guard speaking.isEmpty else { return }
+        #if os(iOS)
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        #endif
+        holdsSound = false
+    }
+
     public func say(_ speeds: [Double]) {
         guard !speeds.isEmpty else { return }
         #if os(iOS)
-        try? AVAudioSession.sharedInstance().setActive(true)
+        if !recording { try? AVAudioSession.sharedInstance().setActive(true) }
         #endif
         holdsSound = true
         for mph in speeds {
@@ -65,7 +94,7 @@ public final class SpeedVoice: NSObject, AVSpeechSynthesizerDelegate {
     private func finished(_ id: ObjectIdentifier, _ text: String) {
         guard speaking.remove(id) != nil else { return }
         spoken.append(text)
-        guard speaking.isEmpty else { return }
+        guard speaking.isEmpty, !recording else { return }
         #if os(iOS)
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         #endif

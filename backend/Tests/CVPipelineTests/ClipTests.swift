@@ -107,6 +107,28 @@ struct PictureTests {
         #expect(isColor(picture.color(2, 3), red: 66, green: 66, blue: 66))
         #expect(isColor(picture.color(1, 1), red: 66, green: 66, blue: 66))
     }
+
+    // Only the box around the taps
+
+    @Test("with your 4 taps, only the box around the net is worked out and the rest stays black")
+    func onlyTheBoxAroundTheTaps() throws {
+        // The taps' box grown by 40% of the tallest post (363.4 px, so 145 px): columns 1430-1919, rows 393-1071.
+        let picture = try grayPicture(around: [Vec2(1579.4, 538.2), Vec2(1812.8, 562.6), Vec2(1806.8, 926.0), Vec2(1575.8, 807.0)])
+
+        #expect(isColor(picture.color(1600, 700), red: 200, green: 200, blue: 200))
+        #expect(isColor(picture.color(1430, 393), red: 200, green: 200, blue: 200))
+        #expect(isColor(picture.color(1429, 700), red: 0, green: 0, blue: 0))
+        #expect(isColor(picture.color(1600, 392), red: 0, green: 0, blue: 0))
+        #expect(isColor(picture.color(100, 100), red: 0, green: 0, blue: 0))
+    }
+
+    @Test("taps 5 px from the picture's corner keep the box inside the picture, with no crash")
+    func boxAtThePictureEdge() throws {
+        let picture = try grayPicture(around: [Vec2(5, 5), Vec2(300, 5), Vec2(300, 305), Vec2(5, 305)])
+
+        #expect(isColor(picture.color(0, 0), red: 200, green: 200, blue: 200))
+        #expect(isColor(picture.color(500, 500), red: 0, green: 0, blue: 0))
+    }
 }
 
 @Suite("Clip", .serialized)
@@ -417,6 +439,17 @@ private func isClose(_ found: [Double], to answer: [Double]) -> Bool {
 private func isColor(_ found: (r: Int, g: Int, b: Int)?, red: Int, green: Int, blue: Int) -> Bool {
     guard let found else { return false }
     return found.r == red && found.g == green && found.b == blue
+}
+
+// A 1920×1080 gray frame read into a picture around the taps.
+private func grayPicture(around taps: [Vec2]) throws -> Picture {
+    var made: CVPixelBuffer?
+    CVPixelBufferCreate(nil, 1920, 1080, kCVPixelFormatType_32BGRA, nil, &made)
+    let frame = try #require(made)
+    CVPixelBufferLockBaseAddress(frame, [])
+    defer { CVPixelBufferUnlockBaseAddress(frame, []) }
+    memset(CVPixelBufferGetBaseAddress(frame)!, 200, CVPixelBufferGetBytesPerRow(frame) * 1080)
+    return Picture(frame: frame, around: taps)
 }
 
 // A 4×4 frame in the live camera's 420 format, read into a picture. Each pixel gets its brightness; each 2×2 block gets

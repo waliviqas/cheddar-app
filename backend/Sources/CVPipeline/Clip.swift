@@ -18,16 +18,25 @@ struct Picture {
 
 extension Picture {
     // A locked frame: a saved video's (blue, green, red, then a spare number) or the live camera's 420 (brightness for
-    // every pixel, one color pair for each 2×2 block).
-    init(frame: CVPixelBuffer) {
+    // every pixel, one color pair for each 2×2 block). With taps, only the box NetCorners reads is worked out: the taps'
+    // box grown by 40% of the tallest post each way (NetCorners reads at most 20%). The rest stays black.
+    init(frame: CVPixelBuffer, around taps: [Vec2]? = nil) {
         let width = CVPixelBufferGetWidth(frame), height = CVPixelBufferGetHeight(frame)
         let format = CVPixelBufferGetPixelFormatType(frame)
         var rgb = [UInt8](repeating: 0, count: width * height * 3)
+        var columns = 0..<width, rows = 0..<height
+        if let taps, taps.count == 4 {
+            let pad = (max(abs(taps[3].y - taps[0].y), abs(taps[2].y - taps[1].y)) * 0.4).rounded()
+            let across = taps.map(\.x), down = taps.map(\.y)
+            let left = min(width, max(0, Int(across.min()! - pad))), top = min(height, max(0, Int(down.min()! - pad)))
+            columns = left..<max(left, min(width, Int(across.max()! + pad) + 1))
+            rows = top..<max(top, min(height, Int(down.max()! + pad) + 1))
+        }
         if format == kCVPixelFormatType_32BGRA {
             let rowLength = CVPixelBufferGetBytesPerRow(frame)
             let pixels = CVPixelBufferGetBaseAddress(frame)!.assumingMemoryBound(to: UInt8.self)
-            for y in 0..<height {
-                for x in 0..<width {
+            for y in rows {
+                for x in columns {
                     let from = y * rowLength + x * 4, to = (y * width + x) * 3
                     rgb[to] = pixels[from + 2]
                     rgb[to + 1] = pixels[from + 1]
@@ -39,8 +48,8 @@ extension Picture {
             let luma = CVPixelBufferGetBaseAddressOfPlane(frame, 0)!.assumingMemoryBound(to: UInt8.self)
             let chroma = CVPixelBufferGetBaseAddressOfPlane(frame, 1)!.assumingMemoryBound(to: UInt8.self)
             let lumaRow = CVPixelBufferGetBytesPerRowOfPlane(frame, 0), chromaRow = CVPixelBufferGetBytesPerRowOfPlane(frame, 1)
-            for y in 0..<height {
-                for x in 0..<width {
+            for y in rows {
+                for x in columns {
                     let pair = (y / 2) * chromaRow + x / 2 * 2, to = (y * width + x) * 3
                     let color = Self.rgb(y: luma[y * lumaRow + x], cb: chroma[pair], cr: chroma[pair + 1], fullRange: fullRange)
                     (rgb[to], rgb[to + 1], rgb[to + 2]) = (color.red, color.green, color.blue)

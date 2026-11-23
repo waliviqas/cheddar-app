@@ -14,14 +14,17 @@ public final class LiveSpeeds: @unchecked Sendable {
     private let netFrameTime: Double  // seconds into the video of the frame the live reader starts on
     private let say: @MainActor @Sendable ([Double]) -> Void
     private let lock = NSLock()
+    // The speed math (about 15-20 ms a shot) runs here, so the camera's line never waits on it and drops frames.
+    private let fitLine = DispatchQueue(label: "cheddar.fits", qos: .userInitiated)
     private var started = false, stopped = false, triedReader = false
     private var zero: Double?  // the video's first frame on the phone's clock
     private var reader: LiveShotReader?
     private var saidReadings: [ShotReading] = []
+    private var handedOver = 0
 
     public convenience init(taps: [Vec2], lens: Lens,
                             say: @escaping @MainActor @Sendable ([Double]) -> Void = { SpeedVoice.shared.say($0) }) {
-        self.init(say: say, netFrameTime: ShotReader.netFrameTime) { LiveShotReader(netFrame: $0, taps: taps, lens: lens) }
+        self.init(say: say, netFrameTime: ShotReader.netFrameTime) { LiveShotReader(netFrame: $0, taps: taps, lens: lens, readsLater: true) }
     }
 
     init(say: @escaping @MainActor @Sendable ([Double]) -> Void, netFrameTime: Double = 0,
@@ -31,8 +34,21 @@ public final class LiveSpeeds: @unchecked Sendable {
         self.makeReader = makeReader
     }
 
-    // When each shot said live left the stick, in seconds into the video.
-    var said: [Double] { lock.withLock { saidReadings.map(\.releaseTime) } }
+    // When each shot said live left the stick, in seconds into the video, once the speed math in progress is done.
+    var said: [Double] {
+        fitLine.sync {}
+        return lock.withLock { saidReadings.map(\.releaseTime) }
+    }
+
+    // Every shot said out loud so far, in order, for saving the session right after Stop without reading the video again.
+    // It waits for the speed math in progress, so a shot decided just before Stop is in it.
+    public var readings: [ShotReading] {
+        fitLine.sync {}
+        return lock.withLock { saidReadings }
+    }
+
+    // How many shots have been handed to the speed math, for checking the camera's line never waits on it.
+    var decisions: Int { lock.withLock { handedOver } }
 
     // The net's corners the live reader found, once it has started.
     var corners: [Vec2] { lock.withLock { reader?.corners ?? [] } }
@@ -59,10 +75,27 @@ public final class LiveSpeeds: @unchecked Sendable {
             triedReader = true
             reader = makeReader(frame)
         }
-        guard let readings = reader?.feed(frame, time: time - zero), !readings.isEmpty else { return }
+        guard let readings = reader?.feed(frame, time: time - zero) else { return }
+        if let decided = reader?.takeDecided(), !decided.isEmpty, let fitter = reader?.fitter {
+            handedOver += decided.count
+            fitLine.async { self.read(decided, with: fitter) }
+        }
+        guard !readings.isEmpty else { return }
         saidReadings += readings
         let speeds = readings.map(\.mph), say = self.say
         DispatchQueue.main.async { MainActor.assumeIsolated { say(speeds) } }
+    }
+
+    // Reads decided shots off the camera's line and says the ones safe to say. A shot decided before Stop is kept and said
+    // even when its speed comes in just after.
+    private func read(_ decided: [ShotLogic.Decided], with fitter: ShotLogic.Fitter) {
+        let readings = decided.map(fitter.note).filter(\.said).compactMap(\.reading)
+        guard !readings.isEmpty else { return }
+        lock.withLock {
+            saidReadings += readings
+            let speeds = readings.map(\.mph), say = self.say
+            DispatchQueue.main.async { MainActor.assumeIsolated { say(speeds) } }
+        }
     }
 
     // A frame the camera dropped: any shot it was in isn't said live.
@@ -85,7 +118,7 @@ public final class LiveSpeeds: @unchecked Sendable {
 
     // After Stop: the session's shots, in time order.
     public func saved(_ afterStop: [ShotReading]) -> [ShotReading] {
-        Self.saved(afterStop, live: lock.withLock { saidReadings })
+        Self.saved(afterStop, live: readings)
     }
 
     // Readings less than 0.3 s apart are the same shot, the window the shot finder joins a shot's pieces within.

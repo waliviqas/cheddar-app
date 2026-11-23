@@ -5,9 +5,9 @@ import Observation
 
 /*
 This class's only job is: run the record screen's story — placing the net's 4 corners, filming the session while saying
-each speed out loud as it's read, reading every shot in it after Stop and saying any the live reading missed, and handing
-back the session with a slow-mo clip of each shot and a small copy of its video kept. A shot said live keeps the speed
-that was said. A guest's session isn't handed back or kept; the screen shows its speeds.
+each speed out loud as it's read, keeping those shots after Stop without reading the video again, and handing back the
+session with a slow-mo clip of each shot and a small copy of its video kept. A phone that can't read while it films reads
+the video after Stop instead. A guest's session isn't handed back or kept; the screen shows its speeds.
 */
 @MainActor
 @Observable
@@ -110,6 +110,7 @@ final class RecordViewModel {
         if let corners, let lens = PhoneLens.lens(fieldOfView: recorder.fieldOfView) {
             live = LiveSpeeds(taps: corners, lens: lens)
         }
+        SpeedVoice.shared.startRecording()
         recorder.beginRecording(live: live) { [weak self] url in
             if let url {
                 self?.analyze(url)
@@ -122,31 +123,34 @@ final class RecordViewModel {
     // Stops filming; reading begins once the file is sealed.
     func stopRecording() {
         live?.stop()
+        SpeedVoice.shared.stopRecording()
         recorder.endRecording()
     }
 
     // Turns the camera off when the screen goes away.
     func stop() {
         live?.stop()
+        SpeedVoice.shared.stopRecording()
         recorder.stop()
     }
 
-    // Reads every shot in the recording and discards the video. A signed-in player's session is handed back; a guest
+    // Gets every shot in the recording and discards the video. A signed-in player's session is handed back; a guest
     // sees each shot's speed, and anyone with no shots read sees that none were found.
     private func analyze(_ url: URL) {
         phase = .analyzing
         Task {
             let length = (try? await AVURLAsset(url: url).load(.duration).seconds) ?? 0
-            var readings: [ShotReading]?
-            if let corners, let lens = PhoneLens.lens(fieldOfView: recorder.fieldOfView) {
-                readings = try? await ShotReader.read(url, taps: corners, lens: lens)
+            var readings: [ShotReading] = []
+            if let live, recorder.handsOverFrames {
+                readings = live.readings
+            } else if let corners, let lens = PhoneLens.lens(fieldOfView: recorder.fieldOfView) {
+                readings = (try? await ShotReader.read(url, taps: corners, lens: lens)) ?? []
+                SpeedVoice.shared.say(readings.map(\.mph))
             }
-            let afterStop = readings ?? []
-            var shots = (live?.saved(afterStop) ?? afterStop).enumerated().map { number, reading in
+            var shots = readings.enumerated().map { number, reading in
                 Shot(id: number + 1, mph: reading.mph, square: NetGrid.square(across: reading.hit.x, up: reading.hit.y),
                      clack: reading.releaseTime)
             }
-            SpeedVoice.shared.say((live?.missed(afterStop) ?? afterStop).map(\.mph))
             if let onSession, !shots.isEmpty {
                 let id = UUID()
                 for index in shots.indices {

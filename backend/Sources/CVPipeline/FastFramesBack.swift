@@ -75,12 +75,15 @@ struct FastFramesBack {
         let luma = CVPixelBufferGetBaseAddressOfPlane(frame, 0)!.assumingMemoryBound(to: UInt8.self)
         let chroma = CVPixelBufferGetBaseAddressOfPlane(frame, 1)!.assumingMemoryBound(to: UInt8.self)
         let lumaRow = CVPixelBufferGetBytesPerRowOfPlane(frame, 0), chromaRow = CVPixelBufferGetBytesPerRowOfPlane(frame, 1)
+        let colorParts = UnsafeMutablePointer<Int32>.allocate(capacity: max(width, 1))
+        defer { colorParts.deallocate() }
+        var colorRow = -1
         for (y, row) in rows.enumerated() {
-            let brightness = luma + row * lumaRow, colors = chroma + (row / 2) * chromaRow, to = out + y * width
-            for x in 0..<width {
-                let column = firstColumn + x, pair = column / 2 * 2
-                to[x] = table.darkness(y: brightness[column], cb: colors[pair], cr: colors[pair + 1])
+            if row / 2 != colorRow {
+                colorRow = row / 2
+                table.colorParts(chroma + colorRow * chromaRow, firstColumn: firstColumn, count: width, into: colorParts)
             }
+            table.darkness(luma + row * lumaRow + firstColumn, colorParts: colorParts, count: width, into: out + y * width)
         }
     }
 
@@ -106,10 +109,30 @@ struct FastFramesBack {
             let now = ring.baseAddress! + middle * count
             let earlier = ring.baseAddress! + before * count, later = ring.baseAddress! + after * count
             darkening.withUnsafeMutableBufferPointer { darkening in
-                for pixel in 0..<count {
+                // Only darkened pixels get a darkening number: they're the only ones spots() reads.
+                func check(_ pixel: Int) {
                     let value = Int16(min(Int(now[pixel]) - Int(earlier[pixel]), Int(now[pixel]) - Int(later[pixel])))
-                    darkening[pixel] = value
-                    if value > limit { found.append(pixel) }
+                    if value > limit {
+                        darkening[pixel] = value
+                        found.append(pixel)
+                    }
+                }
+                // 16 pixels at a time: more than 30 darker than both is above 30 and, 30 lower, still above both, which
+                // stays inside 0 to 255. Only a block with a hit is gone through pixel by pixel.
+                let thirty = SIMD16<UInt8>(repeating: UInt8(limit))
+                var pixel = 0
+                while pixel + 16 <= count {
+                    let here = UnsafeRawPointer(now + pixel).loadUnaligned(as: SIMD16<UInt8>.self)
+                    let lowered = here &- thirty
+                    if any((here .> thirty) .& (lowered .> UnsafeRawPointer(earlier + pixel).loadUnaligned(as: SIMD16<UInt8>.self))
+                           .& (lowered .> UnsafeRawPointer(later + pixel).loadUnaligned(as: SIMD16<UInt8>.self))) {
+                        for one in pixel..<pixel + 16 { check(one) }
+                    }
+                    pixel += 16
+                }
+                while pixel < count {
+                    check(pixel)
+                    pixel += 1
                 }
             }
         }

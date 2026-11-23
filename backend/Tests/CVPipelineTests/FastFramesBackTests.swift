@@ -311,6 +311,35 @@ struct FastFramesBackTests {
         }
     }
 
+    // Same spots, less work
+
+    @Test("a puck in the last 12 pixels of a strip 317 wide, past the last group of 16, is found the same as TwoFramesBack")
+    func puckAtTheEndOfARow() throws {
+        let frames = try (0..<9).map { index in
+            try bgraFrame { x, y in index == 4 && (305..<317).contains(x) && (10..<22).contains(y) ? black : ice }
+        }
+        var fast = FastFramesBack(rows: 0..<64, columns: 0..<317), two = TwoFramesBack(rows: 0..<64, columns: 0..<317)
+        var fastFrames: [SpotFrame] = []
+        for (index, frame) in frames.enumerated() {
+            CVPixelBufferLockBaseAddress(frame, .readOnly)
+            if let result = fast.add(frame, time: Double(index) / 240) { fastFrames.append(result) }
+            two.add(frame, time: Double(index) / 240)
+            CVPixelBufferUnlockBaseAddress(frame, .readOnly)
+        }
+
+        #expect(fastFrames.first?.spots.count == 1)
+        #expect(same(fastFrames, two.frames))
+    }
+
+    @Test("inside a group of 16 pixels, a pixel 31 levels darker counts and one 30 darker doesn't")
+    func darkeningLimitInsideAGroup() throws {
+        let darker = try spotFrames(9) { index in try bgraFrame { x, y in index == 4 && x == 37 && y == 10 ? level(139) : ice } }
+        let notDarker = try spotFrames(9) { index in try bgraFrame { x, y in index == 4 && x == 37 && y == 10 ? level(140) : ice } }
+
+        #expect(try darker.firstResult.changed == 1)
+        #expect(try notDarker.firstResult.changed == 0)
+    }
+
     // Handing in darkness directly
 
     @Test("darkness handed in directly gives the same spot frame as the camera frame")
