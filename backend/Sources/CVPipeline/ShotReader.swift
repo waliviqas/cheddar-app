@@ -16,11 +16,12 @@ public struct ShotReading: Sendable {
 public enum ShotReader {
     private static let nov16PostHeight = 316.5, maxFitMissPx = 3.0, netSideColumns = 150..<1910
     private static let shotStarts: [Double] = [96, 144, 192, 216]
+    static let netFrameTime = 1.0  // seconds in, past the wobble from tapping record
 
     // No answer means the taps can't be a net.
     public static func read(_ clip: URL, taps: [Vec2], lens: Lens) async throws -> [ShotReading]? {
         var corners = taps
-        if let still = try await Clip.picture(clip, at: 1.0), let better = NetCorners.refine(taps, picture: still) {
+        if let still = try await Clip.picture(clip, at: netFrameTime), let better = NetCorners.refine(taps, picture: still) {
             corners = better
         }
         guard let pose = CameraPose(corners: corners, lens: lens) else { return nil }

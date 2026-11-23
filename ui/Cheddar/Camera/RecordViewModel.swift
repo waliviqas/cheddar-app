@@ -4,9 +4,10 @@ import Foundation
 import Observation
 
 /*
-This class's only job is: run the record screen's story — placing the net's 4 corners, filming the session, reading
-every shot in it and saying each speed out loud, and handing back the session with a slow-mo clip of each shot and a
-small copy of its video kept. A guest's session isn't handed back or kept; the screen shows its speeds.
+This class's only job is: run the record screen's story — placing the net's 4 corners, filming the session while saying
+each speed out loud as it's read, reading every shot in it after Stop and saying any the live reading missed, and handing
+back the session with a slow-mo clip of each shot and a small copy of its video kept. A shot said live keeps the speed
+that was said. A guest's session isn't handed back or kept; the screen shows its speeds.
 */
 @MainActor
 @Observable
@@ -23,6 +24,7 @@ final class RecordViewModel {
     private(set) var cameraReady = false
     private(set) var taps: [CGPoint] = []  // where the player put the net's corners, in screen points
     private var screen = CGSize.zero
+    private var live: LiveSpeeds?  // says each speed while filming
     let recorder = ShotRecorder()
     private let onSession: ((Session) -> Void)?  // nil for a guest
 
@@ -71,10 +73,14 @@ final class RecordViewModel {
         phase = .ready
     }
 
-    // Starts filming the session.
+    // Starts filming the session, saying each speed as it's read.
     func record() {
         phase = .recording
-        recorder.beginRecording { [weak self] url in
+        live = nil
+        if let corners, let lens = PhoneLens.lens(fieldOfView: recorder.fieldOfView) {
+            live = LiveSpeeds(taps: corners, lens: lens)
+        }
+        recorder.beginRecording(live: live) { [weak self] url in
             if let url {
                 self?.analyze(url)
             } else {
@@ -85,11 +91,13 @@ final class RecordViewModel {
 
     // Stops filming; reading begins once the file is sealed.
     func stopRecording() {
+        live?.stop()
         recorder.endRecording()
     }
 
     // Turns the camera off when the screen goes away.
     func stop() {
+        live?.stop()
         recorder.stop()
     }
 
@@ -103,11 +111,12 @@ final class RecordViewModel {
             if let corners, let lens = PhoneLens.lens(fieldOfView: recorder.fieldOfView) {
                 readings = try? await ShotReader.read(url, taps: corners, lens: lens)
             }
-            var shots = (readings ?? []).enumerated().map { number, reading in
+            let afterStop = readings ?? []
+            var shots = (live?.saved(afterStop) ?? afterStop).enumerated().map { number, reading in
                 Shot(id: number + 1, mph: reading.mph, square: NetGrid.square(across: reading.hit.x, up: reading.hit.y),
                      clack: reading.releaseTime)
             }
-            SpeedVoice.shared.say(shots.compactMap(\.mph))
+            SpeedVoice.shared.say((live?.missed(afterStop) ?? afterStop).map(\.mph))
             if let onSession, !shots.isEmpty {
                 let id = UUID()
                 for index in shots.indices {

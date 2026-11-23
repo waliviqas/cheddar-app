@@ -32,6 +32,81 @@ struct PictureTests {
         #expect(picture.color(-1, 1) == nil)
         #expect(picture.color(0, 2) == nil)
     }
+
+    // Reading the live camera's colors
+
+    @Test("a saved video's pixel, stored blue 10, green 20, red 30, comes out red 30, green 20, blue 10")
+    func savedVideoPixel() throws {
+        var made: CVPixelBuffer?
+        CVPixelBufferCreate(nil, 2, 2, kCVPixelFormatType_32BGRA, nil, &made)
+        let frame = try #require(made)
+        CVPixelBufferLockBaseAddress(frame, [])
+        let pixels = CVPixelBufferGetBaseAddress(frame)!.assumingMemoryBound(to: UInt8.self)
+        let spot = CVPixelBufferGetBytesPerRow(frame) + 4
+        (pixels[spot], pixels[spot + 1], pixels[spot + 2], pixels[spot + 3]) = (10, 20, 30, 255)
+        let picture = Picture(frame: frame)
+        CVPixelBufferUnlockBaseAddress(frame, [])
+
+        #expect(isColor(picture.color(1, 1), red: 30, green: 20, blue: 10))
+    }
+
+    @Test("16-to-235 way: brightness 16 is pure black and 235 is pure white")
+    func videoRangeBlackAndWhite() throws {
+        let picture = try cameraPicture(fullRange: false) { x, _ in (x < 2 ? 16 : 235, 128, 128) }
+
+        #expect(isColor(picture.color(0, 0), red: 0, green: 0, blue: 0))
+        #expect(isColor(picture.color(2, 0), red: 255, green: 255, blue: 255))
+    }
+
+    @Test("16-to-235 way: brightness 0 and 255, past black and white, stay pure black and pure white")
+    func videoRangePastBlackAndWhite() throws {
+        let picture = try cameraPicture(fullRange: false) { x, _ in (x < 2 ? 0 : 255, 128, 128) }
+
+        #expect(isColor(picture.color(0, 0), red: 0, green: 0, blue: 0))
+        #expect(isColor(picture.color(2, 0), red: 255, green: 255, blue: 255))
+    }
+
+    @Test("0-to-255 way: brightness 0 is pure black and 255 is pure white")
+    func fullRangeBlackAndWhite() throws {
+        let picture = try cameraPicture(fullRange: true) { x, _ in (x < 2 ? 0 : 255, 128, 128) }
+
+        #expect(isColor(picture.color(0, 0), red: 0, green: 0, blue: 0))
+        #expect(isColor(picture.color(2, 0), red: 255, green: 255, blue: 255))
+    }
+
+    @Test("a red post pixel, brightness 66 with colors 109 and 213, comes out red 200, green 30, blue 31")
+    func redPost() throws {
+        let picture = try cameraPicture(fullRange: true) { _, _ in (66, 109, 213) }
+
+        #expect(isColor(picture.color(0, 0), red: 200, green: 30, blue: 31))
+    }
+
+    @Test("all 16.7 million color values come within 1 of the exact math, both ways")
+    func everyColor() {
+        for fullRange in [true, false] {
+            var worst = 0
+            for cb in 0...255 {
+                for cr in 0...255 {
+                    for y in 0...255 {
+                        let got = Picture.rgb(y: UInt8(y), cb: UInt8(cb), cr: UInt8(cr), fullRange: fullRange)
+                        let exact = exactRGB(y, cb, cr, fullRange: fullRange)
+                        worst = max(worst, abs(Int(got.red) - exact.r), abs(Int(got.green) - exact.g), abs(Int(got.blue) - exact.b))
+                    }
+                }
+            }
+            #expect(worst <= 1)
+        }
+    }
+
+    @Test("the pixel at column 1, row 3 uses the color stored for its own 2×2 block")
+    func sharedBlockColor() throws {
+        // Each 2×2 block gets its own color pair; only the block covering columns 0-1, rows 2-3 is red.
+        let picture = try cameraPicture(fullRange: true) { x, y in x / 2 == 0 && y / 2 == 1 ? (66, 109, 213) : (66, 128, 128) }
+
+        #expect(isColor(picture.color(1, 3), red: 200, green: 30, blue: 31))
+        #expect(isColor(picture.color(2, 3), red: 66, green: 66, blue: 66))
+        #expect(isColor(picture.color(1, 1), red: 66, green: 66, blue: 66))
+    }
 }
 
 @Suite("Clip", .serialized)
@@ -308,4 +383,37 @@ private func isClose(_ found: [Double], to answer: [Double]) -> Bool {
 private func isColor(_ found: (r: Int, g: Int, b: Int)?, red: Int, green: Int, blue: Int) -> Bool {
     guard let found else { return false }
     return found.r == red && found.g == green && found.b == blue
+}
+
+// A 4×4 frame in the live camera's 420 format, read into a picture. Each pixel gets its brightness; each 2×2 block gets
+// the color pair painted on its top-left pixel.
+private func cameraPicture(fullRange: Bool, _ paint: (Int, Int) -> (UInt8, UInt8, UInt8)) throws -> Picture {
+    var made: CVPixelBuffer?
+    let format = fullRange ? kCVPixelFormatType_420YpCbCr8BiPlanarFullRange : kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+    CVPixelBufferCreate(nil, 4, 4, format, nil, &made)
+    let frame = try #require(made)
+    CVPixelBufferLockBaseAddress(frame, [])
+    defer { CVPixelBufferUnlockBaseAddress(frame, []) }
+    let luma = CVPixelBufferGetBaseAddressOfPlane(frame, 0)!.assumingMemoryBound(to: UInt8.self)
+    let chroma = CVPixelBufferGetBaseAddressOfPlane(frame, 1)!.assumingMemoryBound(to: UInt8.self)
+    let lumaRow = CVPixelBufferGetBytesPerRowOfPlane(frame, 0), chromaRow = CVPixelBufferGetBytesPerRowOfPlane(frame, 1)
+    for y in 0..<4 {
+        for x in 0..<4 {
+            let (brightness, cb, cr) = paint(x, y)
+            luma[y * lumaRow + x] = brightness
+            if x % 2 == 0 && y % 2 == 0 {
+                chroma[(y / 2) * chromaRow + x] = cb
+                chroma[(y / 2) * chromaRow + x + 1] = cr
+            }
+        }
+    }
+    return Picture(frame: frame)
+}
+
+// Red, green and blue from the camera's color math (BT.709), done with decimals.
+private func exactRGB(_ y: Int, _ cb: Int, _ cr: Int, fullRange: Bool) -> (r: Int, g: Int, b: Int) {
+    let yScale = fullRange ? 1.0 : 255.0 / 219, yOffset = fullRange ? 0.0 : 16, cScale = fullRange ? 1.0 : 255.0 / 224
+    let luma = (Double(y) - yOffset) * yScale, blue = (Double(cb) - 128) * cScale, red = (Double(cr) - 128) * cScale
+    func level(_ value: Double) -> Int { min(max(Int(value.rounded()), 0), 255) }
+    return (level(luma + 1.5748 * red), level(luma - 0.1873 * blue - 0.4681 * red), level(luma + 1.8556 * blue))
 }

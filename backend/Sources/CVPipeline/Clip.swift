@@ -16,6 +16,49 @@ struct Picture {
     }
 }
 
+extension Picture {
+    // A locked frame: a saved video's (blue, green, red, then a spare number) or the live camera's 420 (brightness for
+    // every pixel, one color pair for each 2×2 block).
+    init(frame: CVPixelBuffer) {
+        let width = CVPixelBufferGetWidth(frame), height = CVPixelBufferGetHeight(frame)
+        let format = CVPixelBufferGetPixelFormatType(frame)
+        var rgb = [UInt8](repeating: 0, count: width * height * 3)
+        if format == kCVPixelFormatType_32BGRA {
+            let rowLength = CVPixelBufferGetBytesPerRow(frame)
+            let pixels = CVPixelBufferGetBaseAddress(frame)!.assumingMemoryBound(to: UInt8.self)
+            for y in 0..<height {
+                for x in 0..<width {
+                    let from = y * rowLength + x * 4, to = (y * width + x) * 3
+                    rgb[to] = pixels[from + 2]
+                    rgb[to + 1] = pixels[from + 1]
+                    rgb[to + 2] = pixels[from]
+                }
+            }
+        } else {
+            let fullRange = format == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
+            let luma = CVPixelBufferGetBaseAddressOfPlane(frame, 0)!.assumingMemoryBound(to: UInt8.self)
+            let chroma = CVPixelBufferGetBaseAddressOfPlane(frame, 1)!.assumingMemoryBound(to: UInt8.self)
+            let lumaRow = CVPixelBufferGetBytesPerRowOfPlane(frame, 0), chromaRow = CVPixelBufferGetBytesPerRowOfPlane(frame, 1)
+            for y in 0..<height {
+                for x in 0..<width {
+                    let pair = (y / 2) * chromaRow + x / 2 * 2, to = (y * width + x) * 3
+                    let color = Self.rgb(y: luma[y * lumaRow + x], cb: chroma[pair], cr: chroma[pair + 1], fullRange: fullRange)
+                    (rgb[to], rgb[to + 1], rgb[to + 2]) = (color.red, color.green, color.blue)
+                }
+            }
+        }
+        self.init(width: width, height: height, rgb: rgb)
+    }
+
+    // One 420 pixel as red, green and blue, with the camera's color math (BT.709). The 16-to-235 way stretches to 0-255.
+    static func rgb(y: UInt8, cb: UInt8, cr: UInt8, fullRange: Bool) -> (red: UInt8, green: UInt8, blue: UInt8) {
+        let luma = fullRange ? Double(y) : (Double(y) - 16) * 255 / 219, colorScale = fullRange ? 1.0 : 255.0 / 224
+        let blue = (Double(cb) - 128) * colorScale, red = (Double(cr) - 128) * colorScale
+        func level(_ value: Double) -> UInt8 { UInt8(min(max(value.rounded(), 0), 255)) }
+        return (level(luma + 1.5748 * red), level(luma - 0.1873 * blue - 0.4681 * red), level(luma + 1.8556 * blue))
+    }
+}
+
 /*
 This class's only job is: hand over a video's frames one at a time, each with the exact time it was filmed.
 */
@@ -61,7 +104,7 @@ enum Clip {
         var found: Picture?
         do {
             try await eachFrame(url, from: time) { buffer, _ in
-                found = copied(buffer)
+                found = Picture(frame: buffer)
                 throw FoundFrame()
             }
         } catch is FoundFrame {}
@@ -69,21 +112,4 @@ enum Clip {
     }
 
     private struct FoundFrame: Error {}
-
-    // Video stores each pixel as blue, green, red, then a spare number. Picture wants red, green, blue.
-    private static func copied(_ buffer: CVPixelBuffer) -> Picture {
-        let width = CVPixelBufferGetWidth(buffer), height = CVPixelBufferGetHeight(buffer)
-        let rowLength = CVPixelBufferGetBytesPerRow(buffer)
-        let pixels = CVPixelBufferGetBaseAddress(buffer)!.assumingMemoryBound(to: UInt8.self)
-        var rgb = [UInt8](repeating: 0, count: width * height * 3)
-        for y in 0..<height {
-            for x in 0..<width {
-                let from = y * rowLength + x * 4, to = (y * width + x) * 3
-                rgb[to] = pixels[from + 2]
-                rgb[to + 1] = pixels[from + 1]
-                rgb[to + 2] = pixels[from]
-            }
-        }
-        return Picture(width: width, height: height, rgb: rgb)
-    }
 }
