@@ -44,8 +44,14 @@ struct RecordView: View {
                 .allowsHitTesting(false)
             }
         }
-        .task { await model.start() }
-        .onDisappear { model.stop() }
+        .task {
+            UIApplication.shared.isIdleTimerDisabled = true  // nobody touches a phone on a tripod, so it would lock mid-session
+            await model.start()
+        }
+        .onDisappear {
+            UIApplication.shared.isIdleTimerDisabled = false
+            model.stop()
+        }
     }
 
     // What the player does next while setting the net.
