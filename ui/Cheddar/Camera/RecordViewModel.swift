@@ -2,6 +2,7 @@ import AVFoundation
 import CVPipeline
 import Foundation
 import Observation
+import SwiftUI
 
 /*
 This class's only job is: run the record screen's story — placing the net's 4 corners, filming the session while saying
@@ -91,11 +92,13 @@ final class RecordViewModel {
                     self.netLocked = false
                     return
                 }
-                self.taps = locked.map {
-                    let point = ScreenTaps.screenPoint(of: $0, screen: screen)
-                    return CGPoint(x: point.x, y: point.y)
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.6)) {  // the rings glide onto the corners
+                    self.taps = locked.map {
+                        let point = ScreenTaps.screenPoint(of: $0, screen: screen)
+                        return CGPoint(x: point.x, y: point.y)
+                    }
+                    self.netLocked = true
                 }
-                self.netLocked = true
             }
         }
     }

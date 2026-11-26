@@ -8,6 +8,7 @@ screen that opened this one; a guest sees each shot's speed here, and anyone wit
 struct RecordView: View {
     @State private var model: RecordViewModel
     @State private var dragFrom: CGPoint?  // where the dragged corner was when the finger went down
+    @State private var dragged: Int?  // the corner under the finger, so its ring shows a crosshair
     @Environment(\.dismiss) private var dismiss
 
     private static let screen = "screen"
@@ -86,10 +87,9 @@ struct RecordView: View {
                     NetGridOverlay(corners: outline)
                 }
                 ForEach(model.taps.indices, id: \.self) { index in
-                    Circle()
-                        .fill(model.taps.count == 4 && !model.netLocked && !model.locking ? Theme.goalRed : Theme.cheddar)
-                        .frame(width: 14, height: 14)
-                        .frame(width: 44, height: 44)  // easier to grab than the dot itself
+                    CornerRing(color: model.taps.count == 4 && !model.netLocked && !model.locking ? Theme.goalRed : Theme.cheddar,
+                               dragging: dragged == index, locked: model.netLocked)
+                        .frame(width: 56, height: 56)  // easier to grab than the ring itself
                         .contentShape(Rectangle())
                         .gesture(drag(index))
                         .position(model.taps[index])
@@ -106,10 +106,12 @@ struct RecordView: View {
             .onChanged { drag in
                 let from = dragFrom ?? model.taps[index]
                 dragFrom = from
+                dragged = index
                 model.move(index, to: CGPoint(x: from.x + drag.translation.width, y: from.y + drag.translation.height))
             }
             .onEnded { _ in
                 dragFrom = nil
+                dragged = nil
                 model.lockNet()
             }
     }
