@@ -263,11 +263,11 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Cheddar.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = XXRAKQ74YY;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Cheddar-Info.plist";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Cheddar films your shot to measure its speed. Video never leaves your phone.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Cheddar films your shot to measure its speed. Your videos are saved to your own iCloud, or to this phone if iCloud is off.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -291,11 +291,11 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Cheddar.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = XXRAKQ74YY;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Cheddar-Info.plist";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Cheddar films your shot to measure its speed. Video never leaves your phone.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Cheddar films your shot to measure its speed. Your videos are saved to your own iCloud, or to this phone if iCloud is off.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";

@@ -43,7 +43,7 @@ struct LoginView: View {
                     Text("Save your progress")
                         .font(Theme.display(34))
                         .foregroundStyle(.white)
-                    Text("Sign in so your sessions follow you to any phone.")
+                    Text("Sign in to save your sessions.")
                         .font(.subheadline)
                         .foregroundStyle(.white.opacity(0.6))
                         .multilineTextAlignment(.center)

@@ -3,9 +3,12 @@ import SwiftUI
 /*
 This screen's only job is: the Account tab. A guest gets only "Sign Up to Save Your Sessions", which opens the Apple and
 Google buttons; a guest has no name, since nothing about a guest is kept. A signed-in player gets Name, which changes
-what Cheddar calls them, and Delete My Account, which asks first and then deletes the account for good.
+what Cheddar calls them, and Delete My Account, which asks first and then deletes the account for good. Everyone gets
+Privacy Policy, which opens the published policy.
 */
 struct SettingsView: View {
+    private static let privacyPolicy = URL(string: "https://docs.google.com/document/d/e/2PACX-1vRzMh6ZFsBRFw38WBs9eGx4JQ2JlxwA4y2kK8pQZhhQJtuChhxiFFvmrVeS8-VkkgiwX1brfY_wARHw/pub")!
+
     var guest = false
     let onSignedIn: () -> Void
     let onAccountDeleted: () -> Void
@@ -34,6 +37,7 @@ struct SettingsView: View {
                         .foregroundStyle(.white)
                         .accountRow()
                     }
+                    privacyRow
                 } else {
                     Button {
                         newName = player.name ?? ""
@@ -51,6 +55,7 @@ struct SettingsView: View {
                         .foregroundStyle(.white)
                         .accountRow()
                     }
+                    privacyRow
                     Button { asking = true } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "trash")
@@ -101,6 +106,20 @@ struct SettingsView: View {
             .foregroundStyle(.white.opacity(0.35))
     }
 
+    // Opens the published privacy policy in Safari. Apple wants it reachable from inside the app.
+    private var privacyRow: some View {
+        Link(destination: Self.privacyPolicy) {
+            HStack(spacing: 12) {
+                Image(systemName: "hand.raised")
+                Text("Privacy Policy")
+                Spacer()
+                chevron
+            }
+            .foregroundStyle(.white)
+            .accountRow()
+        }
+    }
+
     private func rename() async {
         problem = nil
         do {
@@ -117,6 +136,8 @@ struct SettingsView: View {
             try await AccountDeletion.deleteMyAccount()
             store.forgetEverything()
             onAccountDeleted()
+        } catch is AccountDeletion.SignInExpired {
+            problem = "Your sign-in expired. Reopen Cheddar, sign in, then delete your account."
         } catch {
             problem = "Couldn't delete your account. Check your connection and try again."
         }
