@@ -13,6 +13,8 @@
 	</array>
 	<key>GIDClientID</key>
 	<string>555427712188-stgqeqi8l822m3hfekqb3413u2b267vd.apps.googleusercontent.com</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>
