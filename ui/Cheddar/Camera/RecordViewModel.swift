@@ -45,9 +45,10 @@ final class RecordViewModel {
         ScreenTaps.corners(taps.map { Vec2($0.x, $0.y) }, screen: Vec2(screen.width, screen.height))
     }
 
-    // Turns the camera on and readies the voice when the screen appears.
+    // Turns the camera on and readies the voice and the net finder when the screen appears.
     func start() async {
         SpeedVoice.shared.start()
+        Task.detached(priority: .utility) { ModelCorners.load() }
         cameraReady = await recorder.start()
     }
 
@@ -73,14 +74,16 @@ final class RecordViewModel {
         netLocked = false
     }
 
-    // Snaps the 4 dots onto the net in a live camera frame and checks they make a real 6×4 net. Record waits until they do.
+    // Moves the 4 dots onto the corners the net finder sees, snaps them onto the net in a live camera frame and checks
+    // they make a real 6×4 net. If that fails, the dots as tapped get the same snap. Record waits until they lock.
     func lockNet() {
         guard phase == .tapping, let corners, let lens = PhoneLens.lens(fieldOfView: recorder.fieldOfView) else { return }
         lockAttempts += 1
         let attempt = lockAttempts, screen = Vec2(screen.width, screen.height)
         locking = true
         recorder.nextFrame { frame in
-            let locked = NetCorners.lock(frame, taps: corners, lens: lens)
+            let nudged = frame.map { ModelCorners.nudge(corners, in: $0) } ?? corners
+            let locked = NetCorners.lock(frame, taps: nudged, lens: lens) ?? NetCorners.lock(frame, taps: corners, lens: lens)
             Task { @MainActor [weak self] in
                 guard let self, attempt == self.lockAttempts else { return }
                 self.locking = false
