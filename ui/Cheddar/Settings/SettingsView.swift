@@ -4,9 +4,10 @@ import SwiftUI
 This screen's only job is: the Account tab. A guest gets only "Sign Up to Save Your Sessions", which opens the Apple and
 Google buttons; a guest has no name, since nothing about a guest is kept. A signed-in player gets Name, which changes
 what Cheddar calls them, and Delete My Account, which asks first and then deletes the account for good. Everyone gets
-Privacy Policy, which opens the published policy.
+Help & Support and Privacy Policy, which open the published support page and policy.
 */
 struct SettingsView: View {
+    private static let support = URL(string: "https://docs.google.com/document/d/e/2PACX-1vTS_yZmMI-W6_znwcgq-BYkM9RnuT-k0muKr5wiRqhZx2QXmba2yuyf3Nm_Tpi7nTfL8OY0CyKZ91i8/pub")!
     private static let privacyPolicy = URL(string: "https://docs.google.com/document/d/e/2PACX-1vRzMh6ZFsBRFw38WBs9eGx4JQ2JlxwA4y2kK8pQZhhQJtuChhxiFFvmrVeS8-VkkgiwX1brfY_wARHw/pub")!
 
     var guest = false
@@ -37,6 +38,7 @@ struct SettingsView: View {
                         .foregroundStyle(.white)
                         .accountRow()
                     }
+                    supportRow
                     privacyRow
                 } else {
                     Button {
@@ -55,6 +57,7 @@ struct SettingsView: View {
                         .foregroundStyle(.white)
                         .accountRow()
                     }
+                    supportRow
                     privacyRow
                     Button { asking = true } label: {
                         HStack(spacing: 12) {
@@ -104,6 +107,20 @@ struct SettingsView: View {
         Image(systemName: "chevron.right")
             .font(.subheadline.weight(.semibold))
             .foregroundStyle(.white.opacity(0.35))
+    }
+
+    // Opens the published support page in Safari: setup tips, why a shot wasn't called, and the contact email.
+    private var supportRow: some View {
+        Link(destination: Self.support) {
+            HStack(spacing: 12) {
+                Image(systemName: "questionmark.circle")
+                Text("Help & Support")
+                Spacer()
+                chevron
+            }
+            .foregroundStyle(.white)
+            .accountRow()
+        }
     }
 
     // Opens the published privacy policy in Safari. Apple wants it reachable from inside the app.
