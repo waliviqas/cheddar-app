@@ -58,6 +58,10 @@ struct LoginView: View {
         .overlay(alignment: .bottom) { buttons }
     }
 
+    // Hidden for 1.0: Google only lets testers sign in until Cheddar has a home page and privacy policy on its own domain.
+    // Turn back on once those pages are up and Google sign-in is published.
+    private static let showsGoogle = false
+
     // Dark to sit with the navy: Apple only allows its button in black or white; Google's is its dark style.
     private var buttons: some View {
         VStack(spacing: 12) {
@@ -72,18 +76,20 @@ struct LoginView: View {
             .frame(height: 52)
             .clipShape(Capsule())
             .overlay(Capsule().stroke(.white.opacity(0.25), lineWidth: 1))
-            Button { Task { await signInWithGoogle() } } label: {
-                HStack(spacing: 10) {
-                    GoogleMark()
-                        .frame(width: 18, height: 18)
-                    Text("Continue with Google")
-                        .font(.system(size: 20, weight: .medium))  // same size and weight as Apple's button
-                        .foregroundStyle(.white)
+            if Self.showsGoogle {
+                Button { Task { await signInWithGoogle() } } label: {
+                    HStack(spacing: 10) {
+                        GoogleMark()
+                            .frame(width: 18, height: 18)
+                        Text("Continue with Google")
+                            .font(.system(size: 20, weight: .medium))  // same size and weight as Apple's button
+                            .foregroundStyle(.white)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 52)
+                    .background(Color(red: 0.075, green: 0.075, blue: 0.078), in: Capsule())
+                    .overlay(Capsule().stroke(.white.opacity(0.25), lineWidth: 1))
                 }
-                .frame(maxWidth: .infinity)
-                .frame(height: 52)
-                .background(Color(red: 0.075, green: 0.075, blue: 0.078), in: Capsule())
-                .overlay(Capsule().stroke(.white.opacity(0.25), lineWidth: 1))
             }
             if showsGuest {
                 Button { askingGuest = true } label: {
